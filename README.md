@@ -26,31 +26,11 @@ recompute derived unit stats from level and class.
 | `public/lib/s1parse.js` | parser for the game-state section |
 | `public/lib/bytes.js` | tiny Node-`Buffer` subset for browsers |
 | `public/lib/catalog.js` | known item and accessory ids for the add suggestions. It has 122 ids, collected from a save, the game exe and the unencrypted parts of the game pak, so it is not guaranteed complete |
-| `serve.js` | tiny local static server for testing |
-| `Dockerfile`, `nginx.conf`, `.dockerignore` | nginx image serving `public/` |
 
-## Host statically
+## Use
 
-Upload the contents of `public/` to any static host, such as GitHub Pages, Netlify,
-Cloudflare Pages, S3 or a plain web server folder. It works from a sub-path and needs no
-server configuration.
+Open `public/index.html` in a browser by double-clicking it. No server is needed. The page uses
+only classic scripts and no `fetch`, so it works from `file://`.
 
-You can also try opening it with no server at all by double-clicking `public/index.html`. The
-page uses only classic scripts and no `fetch`, so it should work from `file://`, but that hasn't
-been tested. For a local HTTP server:
-
-```bash
-node serve.js 8080
-```
-
-## Docker
-
-```bash
-docker build -t ts-save-editor .
-```
-
-```bash
-docker run --rm -p 8080:80 ts-save-editor
-```
-
-Then open http://localhost:8080.
+To host it instead, upload the contents of `public/` to any static host, such as GitHub Pages,
+Netlify, Cloudflare Pages or S3. It works from a sub-path and needs no server configuration.
