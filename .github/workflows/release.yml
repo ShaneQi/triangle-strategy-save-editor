@@ -1,0 +1,43 @@
+# On every pushed tag: publish a GitHub Release named after the tag, mark it latest,
+# and attach public/ as a zip. Run it by hand (Actions -> Release -> Run workflow) to
+# release a tag that was pushed before this workflow existed, e.g. 1.0.
+name: Release
+
+on:
+  push:
+    tags: ['*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+      - name: Zip public/
+        run: |
+          ZIP="triangle-strategy-save-editor-${TAG}.zip"
+          zip -r -q "$ZIP" public
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+
+      - name: Publish release
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # re-run on an existing release: refresh the zip and keep it latest
+            gh release upload "$TAG" "$ZIP" --clobber
+            gh release edit "$TAG" --title "$TAG" --latest
+          else
+            gh release create "$TAG" "$ZIP" --title "$TAG" --latest --generate-notes --verify-tag
+          fi
