@@ -3,6 +3,8 @@
 A single-page web app that edits PC Triangle Strategy saves (`SaveData_N.sav`). Everything runs
 in your browser. The save file is never uploaded, and there is nothing to install.
 
+**Use it online: <https://shaneqi.github.io/triangle-strategy-save-editor/>**
+
 > **Unofficial, experimental, use at your own risk.** This editor is not fully tested. Back up your
 > saves before using it. See the [disclaimer](#disclaimer) below.
 
@@ -27,12 +29,13 @@ Turning on **Advanced editing** (bottom bar) unlocks values whose meaning is not
 
 ## Use
 
-1. Download this repository: **Code → Download ZIP** on GitHub, or `git clone` it.
-2. Open `public/index.html` in a browser by double-clicking it. No server is needed.
-3. **Back up your save first.** Then choose or drop a `SaveData_N.sav` slot file. `SystemData.sav`
+1. Open the [hosted editor](https://shaneqi.github.io/triangle-strategy-save-editor/). To run it offline
+   instead, download this repository (**Code → Download ZIP**, or `git clone`) and double-click
+   `public/index.html`. No server is needed.
+2. **Back up your save first.** Then choose or drop a `SaveData_N.sav` slot file. `SystemData.sav`
    holds game settings and isn't editable.
-4. Change values, then click **Download edited save**.
-5. Replace the original slot file with the downloaded one and load the slot in game.
+3. Change values, then click **Download edited save**.
+4. Replace the original slot file with the downloaded one and load the slot in game.
 
 Before offering the download, the editor re-opens the file it produced. It checks the SHA-1,
 does a full parse, and confirms that every edited value reads back as entered.
@@ -78,8 +81,11 @@ does a full parse, and confirms that every edited value reads back as entered.
 
 ## Hosting
 
-To put it online instead, upload the contents of `public/` to any static host, such as GitHub
-Pages, Netlify, Cloudflare Pages or S3. It works from a sub-path and needs no server configuration.
+This repository's copy is hosted on GitHub Pages at <https://shaneqi.github.io/triangle-strategy-save-editor/>.
+`.github/workflows/pages.yml` publishes `public/` there on every push to `main`.
+
+To host your own copy, upload the contents of `public/` to any static host, such as GitHub Pages,
+Netlify, Cloudflare Pages or S3. It works from a sub-path and needs no server configuration.
 
 ## Files
 
@@ -93,3 +99,5 @@ Pages, Netlify, Cloudflare Pages or S3. It works from a sub-path and needs no se
 | `public/lib/catalog.js` | every ownable inventory id the game defines, with English names: 42 battle items, 31 materials, 2 medals and 49 accessories |
 | `public/lib/gamedata.js` | character and class names, character stories with their unlock flags, story-chart titles and place names |
 | `public/sample/sample.js` | a sample save (base64, ~1 MB), loaded only when you click "Load sample save" |
+| `cli/` | Node command-line tools: `tssave.js` (info, dump, set, export, decode, encode) and `charstory.js` (character-story achievements) |
+| `context/` | developer handoff: format notes, reverse-engineering log, scripts, raw session material; `context/local/` is git-ignored (key, game files, sample saves) |
