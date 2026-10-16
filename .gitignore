@@ -1,0 +1,5 @@
+# never commit save files or local junk
+*.sav
+node_modules/
+.DS_Store
+Thumbs.db

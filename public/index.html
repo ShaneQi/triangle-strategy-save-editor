@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Triangle Strategy Save Editor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <h1>Triangle Strategy Save Editor</h1>
+      <p class="sub">Open a <code>SaveData_N.sav</code>, change values, download the edited save.
+        Everything runs in your browser; the file is never uploaded.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <label id="drop" class="drop">
+      <input id="file" type="file" accept=".sav" hidden>
+      <strong>Choose a save file</strong> or drop it here
+      <span class="hint">Slot saves are named <code>SaveData_N.sav</code>. Back up the original before replacing it.</span>
+    </label>
+    <div id="error" class="error" hidden></div>
+
+    <section id="editor" hidden>
+      <div class="card overview">
+        <canvas id="thumb" width="320" height="180" aria-label="Save thumbnail"></canvas>
+        <dl id="meta"></dl>
+      </div>
+
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="general" aria-selected="true">Money &amp; convictions</button>
+        <button role="tab" data-tab="inventory">Inventory</button>
+        <button role="tab" data-tab="units">Units</button>
+      </nav>
+
+      <div class="panel" data-panel="general">
+        <div class="card">
+          <h2>Money</h2>
+          <div class="grid" id="general-money"></div>
+          <h2>Convictions</h2>
+          <p class="note">The game clamps each conviction to 0–9999.</p>
+          <div class="grid" id="general-conv"></div>
+        </div>
+      </div>
+
+      <div class="panel" data-panel="inventory" hidden>
+        <div class="card">
+          <div class="toolbar">
+            <input id="inv-filter" type="search" placeholder="Filter items…">
+            <span class="spacer"></span>
+            <input id="add-id" list="known-ids" placeholder="Item or accessory id to add" size="34">
+            <datalist id="known-ids"></datalist>
+            <input id="add-count" type="number" min="0" value="1" class="num">
+            <button id="add-btn" type="button">Add item</button>
+          </div>
+          <div id="inventory"></div>
+        </div>
+      </div>
+
+      <div class="panel" data-panel="units" hidden>
+        <div class="card">
+          <p class="note">Level and EXP are the safest edits. The game may recompute other stats from level and class when the save loads.</p>
+          <div class="scroll"><table id="units"></table></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer id="bar" class="bar" hidden>
+    <div class="wrap bar-inner">
+      <span id="changes">No changes</span>
+      <span class="spacer"></span>
+      <button id="reset" type="button" class="ghost">Reset</button>
+      <button id="download" type="button" class="primary" disabled>Download edited save</button>
+    </div>
+  </footer>
+
+  <script src="lib/bytes.js"></script>
+  <script src="lib/s1parse.js"></script>
+  <script src="lib/catalog.js"></script>
+  <script src="lib/core.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
