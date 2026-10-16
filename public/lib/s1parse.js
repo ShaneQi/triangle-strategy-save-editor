@@ -36,9 +36,9 @@ class R {
 // ---- FUN_140d3b260 children ------------------------------------------------------------------
 
 // FUN_140d5e9a0: story chart  TMap<FName, {4 bool}>
-const storyChart = r => r.map(r => r.rep(4, r => r.bool()));
+const storyChart = r => r.map(r => r.rep(4, r => r.at(r.bool)));
 // FUN_140d5e370: selections   TMap<FName, bool>
-const selections = r => r.map(r => r.bool());
+const selections = r => r.map(r => r.at(r.bool));
 // FUN_140d60b80: 0x98-byte record
 const rec98 = r => ({
   id: r.name(), kind: r.e8(), a: r.i32(), b: r.i32(), c: r.i32(), text: r.str(),
@@ -95,7 +95,7 @@ const rec60 = r => ({
 // FUN_140d5b7d0
 const f5b7d0 = r => ({ b: r.u8(), i: r.i32() });
 // FUN_140d3a4e0: TSet<{FName, bool}>
-const nameBoolSet = r => r.arr(r => ({ id: r.name(), v: r.bool() }));
+const nameBoolSet = r => r.arr(r => ({ id: r.name(), v: r.at(r.bool) }));
 
 // TMap<FName, int32> (patchable)
 // countAt / endAt (non-enumerable) let editors append entries, even to an empty map
@@ -111,13 +111,15 @@ const f5bd60 = r => r.rep(5, nameIntMap);
 // FUN_140d39570: 2 x TMap<FName,int32>
 const f39570 = r => r.rep(2, nameIntMap);
 // FUN_140d39000: TMap<FName,{int32,bool}>
-const f39000 = r => r.arr(r => ({ id: r.name(), v: r.at(r.i32), f: r.bool() }));
+const f39000 = r => r.arr(r => ({ id: r.name(), v: r.at(r.i32), f: r.at(r.bool) }));
 // FUN_140d5caf0
-const f5caf0 = r => r.arr(r => ({ a: r.u8(), b: r.u8(), id: r.name(), c: r.i32(), d: r.i32() }));
+const f5caf0 = r => r.arr(r => ({ a: r.u8(), b: r.u8(), id: r.name(), c: r.at(r.i32), d: r.i32() }));
 // FUN_140d3b880
 const f3b880 = r => r.arr(r => ({ a: r.u8(), id: r.name() }));
 // FUN_140c68e10
-const fc68e10 = r => ({ set: r.arr(r => ({ a: r.u8(), v: r.i32() })), map: r.arr(r => ({ id: r.name(), b: r.rep(4, r => r.u8()) })) });
+const fc68e10 = r => ({ set: r.arr(r => ({ a: r.u8(), v: r.at(r.i32) })), map: r.arr(r => ({ id: r.name(), b: r.rep(4, r => r.at(r.u8)) })) });
+// map entries: per-unit character-story achievement tracker {u8 flag6, u8 flag7, u8 flag8, u8 slot}
+// (FUN_140c562d0 sets flagN when that unit's world-map event of type N finishes; all three -> ACHIEVEMENT_(080+slot))
 
 // ---- units (FUN_140decb40) -------------------------------------------------------------------
 // Polymorphic ability objects: {int32 flag, FName id, effect}; the effect layout depends on the
@@ -293,7 +295,31 @@ function parseS1(buf, off, len, opts = {}) {
   };
   r.mark('stop');
   out.stoppedAt = r.o;
+  // The rest of s1 (FUN_140d39a50 map/battle state, FUN_140d5c7e0, FUN_140d5ce30) is not parsed
+  // field by field. The story/event flag table written by the flag manager (FUN_140ef6310:
+  // int32 count + {FString name, int32 value}, one entry per defined flag) is located by structure.
+  out.flags = findFlagTable(buf, r.o, off + len);
   return out;
+}
+
+function findFlagTable(b, from, end) {
+  const tryAt = p => {
+    const q = new R(b, p, end); const n = q.i32();
+    if (n < 200 || n > 100000) return null;
+    const entries = [];
+    for (let i = 0; i < n; i++) {
+      const s = q.str(); if (!/^[A-Za-z0-9_ ]{2,80}$/.test(s)) return null;
+      entries.push({ id: s, v: q.at(q.i32) });
+    }
+    return { countAt: p, endAt: q.o, entries };
+  };
+  for (let p = from; p < end - 8; p++) {
+    const n = b.readInt32LE(p);
+    if (n < 200 || n > 100000) continue;
+    const L = b.readInt32LE(p + 4); if (L < 3 || L > 81 || b[p + 8 + L - 1] !== 0) continue;
+    try { const t = tryAt(p); if (t) return t; } catch { }
+  }
+  return null;
 }
 
 if (typeof module === 'object' && module.exports) module.exports = { R, parseS1 };

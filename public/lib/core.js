@@ -173,7 +173,7 @@
       convictions: { liberty: conv[1], utility: conv[2], morality: conv[3] },
       inventory: inv,
       accessories: Object.fromEntries(w.f39570[0].map(x => [x.id, x.v.v])),
-      lifetimeCounters: Object.fromEntries(w.fc68e10.set.map(x => [x.a, x.v])),
+      lifetimeCounters: Object.fromEntries(w.fc68e10.set.map(x => [x.a, x.v.v])),
       units: w.units.map(u => {
         const st = u.p.stats.map(x => x.v), o = { id: u.p.base.master, class: u.list430.map(x => x.id).join(',') };
         for (const [k, i] of Object.entries(UNIT_STAT)) o[k] = st[i];
@@ -194,19 +194,69 @@
     return [...ids].sort();
   }
 
+  // ---- edit keys --------------------------------------------------------------------------------
+  // Every editable value has a key that resolves (against a fresh parse) to { at, type }.
+  //   money | conviction.<liberty|utility|morality> | bonusconv.<…> | unit.<P001>.<stat>
+  //   item.<ID> (existing; a missing ITEM_/BATTLE_ACCESSARY_ id is appended)
+  //   counter.<n>            lifetime/achievement counter (FUN_140c68e10)
+  //   flag.<NAME>            story/event flag (flag manager table)
+  //   story.<NODE>.<0-3>     story-chart node bools (FUN_140d5e9a0)
+  //   choice.<ID>            dialogue/decision choice bool (FUN_140d5e370)
+  //   nameflag.<ID>          FUN_140d3a4e0 bool set
+  //   order.<ID>.<count|on>  battle orders (FUN_140d39000)
+  //   place.<ID>             place-name table int (FUN_140d5df20)
+  //   unitdata.<k>.<ID>      FUN_140d5d170 maps
+  //   shop.<index>           shop stock count (FUN_140d5caf0)
+  //   charach.<P002>.<f6|f7|f8|slot>  character-story achievement tracker bytes (FUN_140c68e10 map; u8)
+  function resolveKey(s1, key) {
+    const w = s1.world, k = key.split('.'), I = x => x && { at: x.at, type: 'i32' }, B = x => x && { at: x.at, type: 'bool' };
+    const find = (arr, id) => arr && arr.find(x => x.id === id);
+    switch (k[0]) {
+      case 'money': return I(w.tail.money);
+      case 'conviction': return k[1] in CONVICTION ? I(w.f3bb00.a[CONVICTION[k[1]]]) : null;
+      case 'bonusconv': return k[1] in CONVICTION ? I(w.f3bb00.b[CONVICTION[k[1]]]) : null;
+      case 'unit': {
+        const u = w.units.find(u => u.p.base.master.endsWith('_' + k[1]) || u.p.base.master === k[1]);
+        return u && k[2] in UNIT_STAT ? I(u.p.stats[UNIT_STAT[k[2]]]) : null;
+      }
+      case 'item': { const id = k.slice(1).join('.'); for (const m of [...w.f5bd60, ...w.f39570]) { const e = find(m, id); if (e) return I(e.v); } return null; }
+      case 'counter': { const e = w.fc68e10.set.find(x => x.a === +k[1]); return e ? I(e.v) : null; }
+      case 'flag': { const id = k.slice(1).join('.'); const e = s1.flags && find(s1.flags.entries, id); return e ? I(e.v) : null; }
+      case 'story': { const e = w.storyChart[k[1]]; return e ? B(e[+k[2]]) : null; }
+      case 'choice': { const id = k.slice(1).join('.'); return id in w.selections ? B(w.selections[id]) : null; }
+      case 'nameflag': { const e = find(w.f3a4e0, k.slice(1).join('.')); return e ? B(e.v) : null; }
+      case 'order': { const e = find(w.f39000, k[1]); return e ? (k[2] === 'on' ? B(e.f) : I(e.v)) : null; }
+      case 'place': { const e = find(w.f5df20, k.slice(1).join('.')); return e ? I(e.v) : null; }
+      case 'unitdata': { const m = w.f5d170[+k[1]]; const e = m && find(m, k.slice(2).join('.')); return e ? I(e.v) : null; }
+      case 'shop': { const e = w.f5caf0[+k[1]]; return e ? I(e.c) : null; }
+      case 'charach': {   // charach.<P002>.<f6|f7|f8|slot>: per-unit character-story achievement tracker (u8)
+        const e = w.fc68e10.map.find(x => x.id === 'UNIT_MASTER_CH_' + k[1] || x.id === k[1]);
+        const i = CHARACH_FIELD[k[2]];
+        return e && i !== undefined ? { at: e.b[i].at, type: 'u8', max: i === 3 ? 28 : 1 } : null;
+      }
+    }
+    return null;
+  }
+  const CHARACH_FIELD = { f6: 0, f7: 1, f8: 2, slot: 3 };
+  function readKey(p, s1, key) { const r = resolveKey(s1, key); return !r ? undefined : r.type === 'u8' ? p[r.at] : p.readInt32LE(r.at); }
+
   // Apply one edit. Returns a new plaintext buffer when the size changed, otherwise patches in place and returns null.
   function applyEdit(p, ss, s1, key, v) {
     if (!Number.isInteger(v) || v < -2147483648 || v > 2147483647) throw new Error(`${key}: value must be a 32-bit integer`);
     const w = s1.world, k = key.split('.');
-    if (key === 'money') { p.writeInt32LE(v, w.tail.money.at); return null; }
-    if (k[0] === 'conviction' && k[1] in CONVICTION) {
-      if (v < 0 || v > 9999) throw new Error('convictions are clamped to 0..9999 by the game');
-      p.writeInt32LE(v, w.f3bb00.a[CONVICTION[k[1]]].at); return null;
+    if (k[0] === 'conviction' && (v < 0 || v > 9999)) throw new Error('convictions are clamped to 0..9999 by the game');
+    const r = resolveKey(s1, key);
+    if (r) {
+      if (r.type === 'bool' && v !== 0 && v !== 1) throw new Error(`${key}: must be 0 or 1`);
+      if (r.type === 'u8') {
+        if (v < 0 || v > r.max) throw new Error(`${key}: must be 0..${r.max}`);
+        p[r.at] = v; return null;
+      }
+      p.writeInt32LE(v, r.at); return null;
     }
     if (k[0] === 'item') {
       const id = k.slice(1).join('.');
       if (!/^[A-Z0-9_]+$/.test(id)) throw new Error(`invalid item id "${id}"`);
-      for (const m of [...w.f5bd60, ...w.f39570]) { const e = m.find(x => x.id === id); if (e) { p.writeInt32LE(v, e.v.at); return null; } }
       // not present: append to the table it belongs to
       const m = tableForNewId(w, id);
       if (!m) throw new Error(`don't know which inventory table "${id}" belongs to`);
@@ -217,12 +267,7 @@
       np.writeInt32LE(ss[1].len + entry.length, ss[1].off - 4);   // s1 TArray length
       return np;
     }
-    if (k[0] === 'unit' && k.length === 3 && k[2] in UNIT_STAT) {
-      const u = w.units.find(u => u.p.base.master.endsWith('_' + k[1]) || u.p.base.master === k[1]);
-      if (!u) throw new Error(`unit ${k[1]} not found`);
-      p.writeInt32LE(v, u.p.stats[UNIT_STAT[k[2]]].at); return null;
-    }
-    throw new Error(`unknown key ${key}`);
+    throw new Error(`unknown or missing key ${key}`);
   }
   const commonPrefix = (a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i++; return i; };
   // Which TMap a new id goes into: accessories -> owned-accessories map (FUN_140d39570 #0);
@@ -255,23 +300,15 @@
     const file = replaceBlob(save.buf, encode(work.p));
     const check = open(file);
     if (!check.ok) throw new Error('verification failed: SHA-1 mismatch in the produced file');
-    const sum = summarize(check.p, check.ss, check.s1);
     for (const [key, v] of edits) {
-      const got = readBack(sum, key);
+      const got = readKey(check.p, check.s1, key);
       if (got !== v) throw new Error(`verification failed: ${key} reads back as ${got}, expected ${v}`);
     }
     return file;
   }
-  function readBack(sum, key) {
-    const k = key.split('.');
-    if (key === 'money') return sum.money;
-    if (k[0] === 'conviction') return sum.convictions[k[1]];
-    if (k[0] === 'item') { const id = k.slice(1).join('.'); for (const t of Object.values(sum.inventory)) if (id in t) return t[id]; return sum.accessories[id]; }
-    if (k[0] === 'unit') { const u = sum.units.find(u => u.id.endsWith('_' + k[1]) || u.id === k[1]); return u && u[k[2]]; }
-  }
 
   return {
     sha1, tables, locate, replaceBlob, decode, encode, rdFString, sections, preview,
-    UNIT_STAT, CONVICTION, INVENTORY_TABLES, open, reparse, summarize, knownItemIds, groupForNewId, applyEdit, buildEdited,
+    UNIT_STAT, CONVICTION, INVENTORY_TABLES, open, reparse, summarize, knownItemIds, groupForNewId, resolveKey, readKey, applyEdit, buildEdited,
   };
 });
