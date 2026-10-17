@@ -26,6 +26,32 @@
   const INV_LABEL = { battleItems: 'Battle items', materials: 'Upgrade materials', medals: 'Class medals', keyItems: 'Key items & notes', table2: 'Other' };
   const UNIT_COLS = ['level', 'exp', 'hp', 'move', 'jump', 'str', 'int', 'def', 'mdf', 'dex', 'agi', 'luk'];
   const SEEN_CAT = { 1: 'Notes', 2: 'Character stories', 3: 'Tutorials', 4: 'Information' };
+  const ICON_TYPE = {
+    MAIN_STORY: 'Story scene', MAIN_BATTLE: 'Battle', MAIN_RESEARCH: 'Exploration', OPTIONAL_RESEARCH: 'Optional exploration',
+    MAIN_VOTE: 'Vote', MAIN_VOTE_CRITICAL: 'Vote', SUB_STORY: 'Side story', SUB_JO: 'Recruitment story',
+    SUB_HA: 'Character story, part 1', SUB_KYU: 'Character story, part 2',
+  };
+  const CHAPTER_KEYS = Object.keys(GD.chapters || {}).sort((a, b) => b.length - a.length);
+  const chapterOf = ev => { const k = CHAPTER_KEYS.find(k => ev === k || ev.startsWith(k + '_')); return k ? GD.chapters[k] : null; };
+  // Readable meaning of an event flag, or null. WI_END_<event> = world-map event finished in this playthrough,
+  // WI_END_<event>_EX = finished in any playthrough (kept in New Game+; inferred from save data).
+  function flagMeaning(id) {
+    let m = id.match(/^WI_END_(.+?)(_EX)?$/);
+    if (m) {
+      const ev = m[1], ic = (GD.icons || {})[ev], when = m[2] ? 'done in any playthrough' : 'done this playthrough';
+      const story = GD.stories.find(s => s[4] && s[4].replace(/^WI_END_|_EX$/g, '') === ev);
+      const what = story ? `${story[2]}${story[3] ? ': ' + story[3] : ''}` : chapterOf(ev);
+      if (!ic) return /^MS/.test(ev) ? [what, 'no world-map icon (likely unused)', when].filter(Boolean).join(' · ') : null;
+      return [what, ICON_TYPE[ic[0]] || ic[0], ic[1], when].filter(Boolean).join(' · ');
+    }
+    m = id.match(/^CHAPTER_(START|END)_(.+)$/);
+    if (m) {
+      const c = Object.values(GD.chart).find(c => c[3] === id || c[4] === id);
+      const name = c ? [c[1], c[2]].filter(Boolean).join(' – ') : chapterOf(m[2]);
+      return name ? `${name} · chapter ${m[1] === 'START' ? 'started' : 'finished'}` : null;
+    }
+    return null;
+  }
 
   // ---- file loading --------------------------------------------------------------------------
   const drop = $('#drop'), input = $('#file');
@@ -272,7 +298,10 @@
     if (!flags) { box.replaceChildren(el('p', { class: 'note' }, 'The event-flag table was not found in this save.')); }
     else {
       box.replaceChildren(...flags.entries.map(f => {
-        const r = row(f.id, f.id, null, numInput('flag.' + f.id, f.v.v, { adv: true }));
+        const meaning = flagMeaning(f.id);
+        // The game writes flags as bools (value != 0); keep a number box for anything else so it stays visible.
+        const v = f.v.v, input = v === 0 || v === 1 ? boolInput('flag.' + f.id, v, { adv: true }) : numInput('flag.' + f.id, v, { adv: true });
+        const r = row(f.id, meaning || f.id, meaning ? f.id : null, input);
         r.dataset.val = f.v.v; return r;
       }));
     }

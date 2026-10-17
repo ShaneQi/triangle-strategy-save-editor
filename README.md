@@ -22,7 +22,7 @@ Feedback, bugs or feature requests: please [open an issue on GitHub](https://git
 | Raw data | — | everything else the parser decodes (vote events, location, map actors, full unit records, …) |
 
 Turning on **Advanced editing** (bottom bar) unlocks values whose meaning is not confirmed:
-- the 2,362 story/event flags
+- the 2,361 story/event flags
 - story-chart node flags and dialogue choices
 - battle orders, shop stock and places visited
 - a second conviction array

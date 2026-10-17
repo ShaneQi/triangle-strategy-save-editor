@@ -297,8 +297,10 @@ function parseS1(buf, off, len, opts = {}) {
   r.mark('stop');
   out.stoppedAt = r.o;
   // The rest of s1 (FUN_140d39a50 map/battle state, FUN_140d5c7e0, FUN_140d5ce30) is not parsed
-  // field by field. The story/event flag table written by the flag manager (FUN_140ef6310:
-  // int32 count + {FString name, int32 value}, one entry per defined flag) is located by structure.
+  // field by field. The story/event flag table written by the flag manager (FUN_140ef6310) is
+  // located by structure. It walks the reflected enum ELuaFlag: int32 count (= enum entries - 1, i.e.
+  // without _MAX), then {FString name, bool as int32} for enum indices 1 .. count-1 (index 0 is
+  // skipped), so it holds count - 1 entries in enum declaration order. Next comes an FString (manager +0x7320).
   out.flags = findFlagTable(buf, r.o, off + len);
   return out;
 }
@@ -308,11 +310,12 @@ function findFlagTable(b, from, end) {
     const q = new R(b, p, end); const n = q.i32();
     if (n < 200 || n > 100000) return null;
     const entries = [];
-    for (let i = 0; i < n; i++) {
-      const s = q.str(); if (!/^[A-Za-z0-9_ ]{2,80}$/.test(s)) return null;
+    for (let i = 1; i < n; i++) {
+      const s = q.str(); if (!/^[A-Za-z0-9_]{2,80}$/.test(s)) return null;
       entries.push({ id: s, v: q.at(q.i32) });
     }
-    return { countAt: p, endAt: q.o, entries };
+    const endAt = q.o;
+    return { countAt: p, endAt, entries, nextStr: q.str() };
   };
   for (let p = from; p < end - 8; p++) {
     const n = b.readInt32LE(p);

@@ -41,6 +41,7 @@
         <button role="tab" data-tab="units">Units</button>
         <button role="tab" data-tab="story">Story</button>
         <button role="tab" data-tab="progress">Progress</button>
+        <button role="tab" data-tab="flags">Event flags</button>
         <button role="tab" data-tab="raw">Raw data</button>
       </nav>
 
@@ -109,7 +110,7 @@
         <div class="card">
           <h2>Story chart <span class="tag">advanced</span></h2>
           <p class="note">Four flags per chart node as stored by the game (meanings unconfirmed). Chapter progress itself is
-            driven by the CHAPTER_START/END event flags on the Progress tab.</p>
+            driven by the CHAPTER_START/END flags on the Event flags tab.</p>
           <div class="scroll"><table id="chart"></table></div>
         </div>
         <div class="card">
@@ -128,14 +129,6 @@
           <div id="counters" class="rows"></div>
         </div>
         <div class="card">
-          <h2>Event flags <span class="tag">advanced</span></h2>
-          <p class="note">Every story/event flag the game defines (chapter start/end, events, world-map icons, quests…).
-            Changing these can break story progression.</p>
-          <div class="toolbar"><input id="flag-filter" type="search" placeholder="Filter flags…">
-            <label class="chk"><input id="flag-set-only" type="checkbox"> set only</label><span id="flag-count" class="hint"></span></div>
-          <div id="flags" class="rows"></div>
-        </div>
-        <div class="card">
           <h2>Places visited <span class="tag">advanced</span></h2>
           <div id="places" class="rows"></div>
         </div>
@@ -143,6 +136,20 @@
           <h2>Seen notes, information &amp; tutorials</h2>
           <p class="note">Read-only.</p>
           <div id="seen"></div>
+        </div>
+      </div>
+
+      <div class="panel" data-panel="flags" hidden>
+        <div class="card">
+          <h2>Event flags <span class="tag">advanced</span></h2>
+          <p class="note">Every story/event flag the game defines (chapter start/end, events, world-map icons, quests…).
+            Changing these can break story progression. Each world-map event has two flags: <code>WI_END_…</code> is set
+            when it is done in this playthrough, and <code>WI_END_…_EX</code> when it was done in any playthrough (kept in
+            New Game+; inferred from save data). Events marked "no world-map icon" are never set in our sample and are
+            probably unused. Search matches chapter, place and event type too.</p>
+          <div class="toolbar"><input id="flag-filter" type="search" placeholder="Filter flags…">
+            <label class="chk"><input id="flag-set-only" type="checkbox"> set only</label><span id="flag-count" class="hint"></span></div>
+          <div id="flags" class="rows"></div>
         </div>
       </div>
 
