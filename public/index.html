@@ -35,111 +35,17 @@
         <dl id="meta"></dl>
       </div>
 
-      <nav class="tabs" role="tablist">
-        <button role="tab" data-tab="general" aria-selected="true">Money &amp; convictions</button>
-        <button role="tab" data-tab="inventory">Inventory</button>
-        <button role="tab" data-tab="units">Units</button>
-        <button role="tab" data-tab="story">Story</button>
-        <button role="tab" data-tab="progress">Progress</button>
-        <button role="tab" data-tab="flags">Event flags</button>
-        <button role="tab" data-tab="raw">Raw data</button>
-      </nav>
+      <!-- One tab per part of the world object (s1, FUN_140d3b260), in save order; built by app.js -->
+      <nav id="tabs" class="tabs" role="tablist"></nav>
+      <div id="panels"></div>
 
-      <div class="panel" data-panel="general">
-        <div class="card">
-          <h2>Money</h2>
-          <div class="grid" id="general-money"></div>
-          <h2>Convictions</h2>
-          <p class="note">The game clamps each conviction to 0–9999.</p>
-          <div class="grid" id="general-conv"></div>
-          <h3 class="adv-title">Second conviction array <span class="tag">advanced</span></h3>
-          <p class="note">A second int[4] stored right after the convictions (meaning unknown; 50 for Utility in the sample save).</p>
-          <div class="grid" id="general-conv2"></div>
-        </div>
-      </div>
-
-      <div class="panel" data-panel="inventory" hidden>
-        <div class="card">
-          <div class="toolbar">
-            <input id="inv-filter" type="search" placeholder="Filter items…">
-            <span class="spacer"></span>
-            <input id="add-id" list="known-ids" placeholder="Item or accessory to add (name or id)" size="34">
-            <datalist id="known-ids"></datalist>
-            <input id="add-count" type="number" min="0" value="1" class="num">
-            <button id="add-btn" type="button">Add item</button>
-          </div>
-          <div id="inventory"></div>
-        </div>
-        <div class="card">
-          <h2>Battle orders <span class="tag">advanced</span></h2>
-          <p class="note">Count and the second flag as stored by the game (meaning of the flag unconfirmed).</p>
-          <div id="orders" class="rows"></div>
-        </div>
-        <div class="card">
-          <h2>Shop stock <span class="tag">advanced</span></h2>
-          <p class="note">Remaining stock per shop entry.</p>
-          <input id="shop-filter" type="search" placeholder="Filter…">
-          <div id="shop" class="rows"></div>
-        </div>
-      </div>
-
-      <div class="panel" data-panel="units" hidden>
-        <div class="card">
-          <p class="note">Level and EXP are the safest edits. The game may recompute other stats from level and class when the save loads.</p>
-          <div class="scroll wide"><table id="units"></table></div>
-        </div>
-      </div>
-
-      <div class="panel" data-panel="story" hidden>
+      <div class="panel" data-panel="flags" hidden>
         <div class="card">
           <h2>Character stories</h2>
           <p class="note">"Unlocked" is the story's unlock flag from the game's character-story table. "Viewed" means it was
             opened in the Character Stories menu (read-only). Unlocking through the flag has not been tested in game.</p>
           <div class="scroll"><table id="stories"></table></div>
         </div>
-        <div class="card">
-          <h2>Character-story achievements</h2>
-          <p class="note">Per-unit tracker the game keeps for the character-story achievements. It sets flags 6, 7 and 8
-            when that unit's world-map story events of those types finish. At the moment the last of the three becomes 1,
-            it unlocks Steam <code>ACHIEVEMENT_(080 + slot)</code>. Ticking all three in the save does not fire it, because the
-            game must set the last flag itself. To re-send a missing achievement (verified in game), take a unit with exactly
-            one flag still off and set its slot (advanced) to the target. Then play that unit's story from the world map. The
-            Character Stories re-watch menu does not count. Steam only receives achievements that aren't unlocked yet.</p>
-          <div class="scroll"><table id="charach"></table></div>
-        </div>
-        <div class="card">
-          <h2>Story chart <span class="tag">advanced</span></h2>
-          <p class="note">Four flags per chart node as stored by the game (meanings unconfirmed). Chapter progress itself is
-            driven by the CHAPTER_START/END flags on the Event flags tab.</p>
-          <div class="scroll"><table id="chart"></table></div>
-        </div>
-        <div class="card">
-          <h2>Dialogue choices <span class="tag">advanced</span></h2>
-          <p class="note">One flag per decision option the game tracks.</p>
-          <input id="choice-filter" type="search" placeholder="Filter choices…">
-          <div id="choices" class="rows"></div>
-        </div>
-      </div>
-
-      <div class="panel" data-panel="progress" hidden>
-        <div class="card">
-          <h2>Achievement counters</h2>
-          <p class="note">Lifetime counters the game checks for achievements (id 40 = total gold earned). Raising one can
-            unlock a Steam achievement the next time the game updates it.</p>
-          <div id="counters" class="rows"></div>
-        </div>
-        <div class="card">
-          <h2>Places visited <span class="tag">advanced</span></h2>
-          <div id="places" class="rows"></div>
-        </div>
-        <div class="card">
-          <h2>Seen notes, information &amp; tutorials</h2>
-          <p class="note">Read-only.</p>
-          <div id="seen"></div>
-        </div>
-      </div>
-
-      <div class="panel" data-panel="flags" hidden>
         <div class="card">
           <h2>Event flags <span class="tag">advanced</span></h2>
           <p class="note">Every story/event flag the game defines (chapter start/end, events, world-map icons, quests…).
@@ -150,16 +56,6 @@
           <div class="toolbar"><input id="flag-filter" type="search" placeholder="Filter flags…">
             <label class="chk"><input id="flag-set-only" type="checkbox"> set only</label><span id="flag-count" class="hint"></span></div>
           <div id="flags" class="rows"></div>
-        </div>
-      </div>
-
-      <div class="panel" data-panel="raw" hidden>
-        <div class="card">
-          <h2>Raw parsed data</h2>
-          <p class="note">Everything else the parser decodes, read-only. Values shown as <code>{v, at}</code> are stored at
-            plaintext offset <code>at</code>.</p>
-          <div class="toolbar"><select id="raw-block"></select><span id="raw-size" class="hint"></span></div>
-          <pre id="raw"></pre>
         </div>
       </div>
     </section>

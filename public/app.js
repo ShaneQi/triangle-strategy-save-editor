@@ -26,6 +26,27 @@
   const INV_LABEL = { battleItems: 'Battle items', materials: 'Upgrade materials', medals: 'Class medals', keyItems: 'Key items & notes', table2: 'Other' };
   const UNIT_COLS = ['level', 'exp', 'hp', 'move', 'jump', 'str', 'int', 'def', 'mdf', 'dex', 'agi', 'luk'];
   const SEEN_CAT = { 1: 'Notes', 2: 'Character stories', 3: 'Tutorials', 4: 'Information' };
+  // Achievement counter ids (world part 22) are EAchievementType values, in the enum's declaration order
+  // (exe reflection strings at 0x143d3d6d0…; FUN_140c55f30 indexes the achievement table with them).
+  const UNITS30 = ['SERENOA', 'ROLAND', 'BENEDICT', 'FREDERICA', 'GEELA', 'ANNA', 'HUGHETTE', 'ERADOR', 'RUDOLPH', 'CORENTIN', 'JULIO', 'MILO',
+    'CORDELIA', 'TRAVIS', 'TRISH', 'AVLORA', 'HOSSABARA', 'NARVE', 'MEDINA', 'JENS', 'MAXWELL', 'ARCHIBALD', 'FLANAGAN', 'EZANA', 'LIONEL',
+    'GROMA', 'PICCOLETTA', 'DECIMAL', 'QUAHAUG', 'GIOVANNA'];
+  const ACHIEVEMENT_TYPE = [
+    'ACQUIRED_ALL', 'PARTY_MEMBER_ALL', 'FAITH_MORAL_MAX', 'FAITH_BENEFIT_MAX', 'FAITH_FREEDOM_MAX', 'FAITH_ALL_MAX', 'VOTE_PERSUASION',
+    'VOTE_UNANIMOUS', 'VOTE_FINAL', 'NOT_BURN_VILLAGE', 'REVEAL_ROLAND', 'RECEIVE_ROYAL_RING', 'FOUND_ROCK_SALT', 'ACCUSATION_ILLEGAL',
+    'BENEDICT_ROOT_CLEAR', 'ROLAND_ROOT_CLEAR', 'FREDERICA_ROOT_CLEAR', 'SERENOA_ROOT_CLEAR', 'BATTLE_WIN_FIRST', 'BATTLE_WIN_COUNT',
+    'BATTLE_ATTACK_WEAK', 'BATTLE_ATTACK_PURSUIT', 'BATTLE_BACK_ATTACK', 'BATTLE_LAND_FIRE', 'BATTLE_LAND_FREEZE', 'BATTLE_LAND_PUDDLE',
+    'BATTLE_UNIT_ELECTRIC_CHOCK', 'BATTLE_UNIT_CRUSH', 'BATTLE_UNIT_FALL_DAMAGE', 'BATTLE_ATTACK_COUNTER', 'BATTLE_HEAL', 'BATTLE_ATTACK_BUFF',
+    'BATTLE_ATTACK_DEBUFF', 'BATTLE_USE_ITEM', 'BATTLE_DEFEAT_5UNIT', 'BATTLE_VICTORY_UNIT_HALF', 'BATTLE_DAMAGE_MINECART',
+    'BATTLE_ACQUIRED_DROP_ITEM', 'BATTLE_USE_TRUMP', 'BATTLE_EXPLOIT', 'MONEY_ACQUIRED', 'QUEST_CLEAR_FINAL', 'QUEST_CLEAR_ALL', 'TALK_CAT_ALL',
+    'TRUMP_ALL_KP_MAX', 'STORY_CHART_COMPLETE', 'NOTE_COMPLETE', 'INFORMATION_COMPLETE', 'WEAPON_ABILITY_COMPLETE',
+    ...UNITS30.map(u => 'MASTER_' + u), ...UNITS30.slice(1).map(u => 'CHAR_STORY_' + u), 'ERROR_ACHIEVEMENT'];
+  const achievementLabel = id => {
+    const t = ACHIEVEMENT_TYPE[id];
+    if (!t) return `Counter ${id}`;
+    const words = t.toLowerCase().replace(/_/g, ' ');
+    return words[0].toUpperCase() + words.slice(1);
+  };
   const ICON_TYPE = {
     MAIN_STORY: 'Story scene', MAIN_BATTLE: 'Battle', MAIN_RESEARCH: 'Exploration', OPTIONAL_RESEARCH: 'Optional exploration',
     MAIN_VOTE: 'Vote', MAIN_VOTE_CRITICAL: 'Vote', SUB_STORY: 'Side story', SUB_JO: 'Recruitment story',
@@ -135,10 +156,112 @@
   };
 
   // ---- rendering ----------------------------------------------------------------------------------------
+  // The tabs follow the world object (s1, FUN_140d3b260): one tab per part, in save order. Each tab holds
+  // everything the editor knows about that part: inputs where its meaning is known, raw JSON for the rest.
+  const hex = n => '0x' + n.toString(16).toUpperCase();
+  // byte arrays: short ones (e.g. the per-unit vote bytes in part 3) as numbers, big ones (thumbnail, raw ability data) as a size
+  const jsonText = v => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toString()
+    : (x && x.buffer instanceof ArrayBuffer && x.length !== undefined && !Array.isArray(x) ? (x.length <= 64 ? `[${Array.from(x).join(', ')}]` : `<${x.length} bytes>`) : x), 1);
+  // the whole part for download: nothing cut, every byte array in full as hex
+  const fullJson = v => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toString()
+    : (x && x.buffer instanceof ArrayBuffer && x.length !== undefined && !Array.isArray(x) ? Array.from(x, b => b.toString(16).padStart(2, '0')).join('') : x), 1);
+  function downloadText(name, text) {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = el('a', { href: url, download: name });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+  // read-only JSON view; filled on first open so large parts don't slow down loading
+  function rawView(get, opts = {}) {
+    const pre = el('pre', { class: 'raw' }), size = el('span', { class: 'hint' });
+    const d = el('details', {}, el('summary', {}, opts.label || 'Raw data (read-only)', ' ', size), pre);
+    d.addEventListener('toggle', () => {
+      if (!d.open || pre.textContent) return;
+      const text = jsonText(get());
+      pre.textContent = text.length > 300000 ? text.slice(0, 300000) + '\n… (truncated)' : text;
+      size.textContent = `${(text.length / 1024).toFixed(1)} KB`;
+    });
+    if (opts.open) d.open = true;
+    return d;
+  }
+  const note = (...kids) => el('p', { class: 'note' }, ...kids);
+  const card = (title, ...kids) => el('div', { class: 'card' }, title ? el('h2', {}, ...[].concat(title)) : null, ...kids);
+  const advTag = () => el('span', { class: 'tag' }, 'advanced');
+  const rowsBox = id => el('div', { id, class: 'rows' });
+  function filterBox(placeholder, target) {
+    const i = el('input', { type: 'search', placeholder });
+    i.addEventListener('input', () => filterRows(target, i.value));
+    return i;
+  }
+
+  // n, parser mark (where the part starts), serializer, tab label, renderer(panel, w)
+  const PARTS = [
+    [1, 'storyChart', 'FUN_140d5e9a0', 'Story chart', partStoryChart],
+    [2, 'selections', 'FUN_140d5e370', 'Choices', partChoices],
+    [3, 'f240', 'FUN_140d5f240', 'Votes', (p, w) => p.append(card(null, note('Vote events: names, records, strings and two 128-bool arrays. Meanings not mapped yet.'), rawView(() => w.f240, { open: true })))],
+    [4, 'f3bb00', 'FUN_140d3bb00', 'Convictions', partConvictions],
+    [5, 'f5bdc0', 'FUN_140d5bdc0', 'Block 5', (p, w) => p.append(card(null, note('A present flag plus a list of {int, int, int}. Meaning unknown.'), rawView(() => w.f5bdc0, { open: true })))],
+    [6, 'f3c8f0', 'FUN_140d3c8f0', 'Block 6', (p, w) => p.append(card(null, note('int32, int32 list, int32, name. Meaning unknown.'), rawView(() => w.f3c8f0, { open: true })))],
+    [7, 'f3c640', 'FUN_140d3c640', 'Block 7', (p, w) => p.append(card(null, note('Two int32. Meaning unknown.'), rawView(() => w.f3c640, { open: true })))],
+    [8, 'f5e2e0', 'FUN_140d5e2e0', 'Block 8', (p, w) => p.append(card(null, note('Eight bools. Meaning unknown.'), rawView(() => w.f5e2e0, { open: true })))],
+    [9, 'pickups', 'FUN_140d26550', 'Pickups', (p, w) => p.append(card(null, note(`Field items already picked up (${w.pickups.length}).`), rawView(() => w.pickups, { open: true })))],
+    [10, 'location', 'FUN_140d5c5a0', 'Location', (p, w) => p.append(card(null, note('Current map name, position and related values.'), rawView(() => w.location, { open: true })))],
+    [11, 'rec60', 'FUN_140d38d30', 'Map actors', (p, w) => p.append(card(null,
+      note(`${w.rec60.length} map actor/NPC state records. Only the first 200 are shown here; Download JSON (above) has all of them.`), rawView(() => w.rec60.slice(0, 200), { open: true })))],
+    [12, 'f5b7d0', 'FUN_140d5b7d0', 'Block 12', (p, w) => p.append(card(null, note('u8 and int32. The game writes the int from a global on save and ignores it on load.'), rawView(() => w.f5b7d0, { open: true })))],
+    [13, 'flags4dc', '(inline)', 'Block 13', (p, w) => p.append(card(null, note('Four bools written by the world object itself. Meaning unknown.'), rawView(() => w.flags4dc, { open: true })))],
+    [14, 'f3a4e0', 'FUN_140d3a4e0', 'Name flags', (p, w) => p.append(card(null, note(`Name → bool set (${w.f3a4e0.length}; BATTLE_MAPCFG_* and others).`), rawView(() => w.f3a4e0, { open: true })))],
+    [15, 'f5df20', 'FUN_140d5df20', 'Place emblems', partPlaces],
+    [16, 'f5d170', 'FUN_140d5d170', 'Unit data', (p, w) => p.append(card(null, note('Per-unit name → int maps. Meaning unknown.'), rawView(() => w.f5d170, { open: true })))],
+    [17, 'f5bd60', 'FUN_140d5bd60', 'Inventory', partInventory],
+    [18, 'f39570', 'FUN_140d39570', 'Accessories', partAccessories],
+    [19, 'f39000', 'FUN_140d39000', 'Battle orders', partOrders],
+    [20, 'f5caf0', 'FUN_140d5caf0', 'Shop stock', partShop],
+    [21, 'f3b880', 'FUN_140d3b880', 'Seen list', partSeen],
+    [22, 'fc68e10', 'FUN_140c68e10', 'Counters', partCounters],
+    [23, 'units', 'FUN_140decb40', 'Units', partUnits],
+    [24, 'worldTail', '(inline)', 'Money', partTail],
+  ];
+  let currentTab = 'part1';
+
+  // start offset and size of each part, from the parser's marks (units are one mark per unit)
+  function partRanges() {
+    const m = save.s1.marks, at = {}, out = {};
+    for (const [label, o] of m) if (!(label in at)) at[label] = o;
+    const order = PARTS.map(p => p[1]).concat('stop');
+    for (let i = 0; i < PARTS.length; i++) out[order[i]] = [at[order[i]], at[order[i + 1]] - at[order[i]]];
+    return out;
+  }
+
   function render() {
     $('#editor').hidden = false; $('#bar').hidden = false;
-    renderOverview(); renderGeneral(); renderInventory(); renderOrdersShop(); renderUnits();
-    renderStory(); renderProgress(); renderRaw(); updateBar();
+    renderOverview();
+    const w = save.s1.world, ranges = partRanges(), s1off = save.ss[1].off;
+    const nav = $('#tabs'), panels = $('#panels');
+    nav.replaceChildren(); panels.replaceChildren();
+    for (const [n, mark, fn, label, renderPart] of PARTS) {
+      nav.append(el('button', { role: 'tab', dataset: { tab: 'part' + n } }, `${n} ${label}`));
+      const [o, len] = ranges[mark];
+      const dl = el('button', { type: 'button', class: 'ghost small', title: 'Everything the parser read for this part, as JSON (byte arrays as hex)' }, 'Download JSON');
+      dl.addEventListener('click', () => downloadText(
+        `${fileName.replace(/\.sav$/i, '')}-part${String(n).padStart(2, '0')}-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`,
+        fullJson(mark === 'worldTail' ? w.tail : w[mark])));
+      const panel = el('div', { class: 'panel', dataset: { panel: 'part' + n } },
+        el('p', { class: 'part-meta' }, el('strong', {}, `Part ${n} of 24: ${label}`),
+          ` · ${fn} · s1+${hex(o - s1off)} · ${len.toLocaleString()} bytes `, dl));
+      renderPart(panel, w);
+      panels.append(panel);
+    }
+    nav.append(el('button', { role: 'tab', dataset: { tab: 'flags' } }, 'Event flags'));
+    renderFlags();
+    nav.querySelectorAll('button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+    showTab(currentTab);
+    updateBar();
+  }
+  function showTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('#tabs button').forEach(x => x.setAttribute('aria-selected', x.dataset.tab === tab));
+    document.querySelectorAll('.panel').forEach(p => { p.hidden = p.dataset.panel !== tab; });
   }
 
   function renderOverview() {
@@ -163,101 +286,153 @@
     }
   }
 
-  function renderGeneral() {
-    $('#general-money').replaceChildren(field('Gold', numInput('money', summary.money, { min: 0 })));
-    const cv = summary.convictions, b = save.s1.world.f3bb00.b;
-    const C = [['utility', 'Utility'], ['morality', 'Morality'], ['liberty', 'Liberty']];
-    $('#general-conv').replaceChildren(...C.map(([k, l]) => field(l, numInput('conviction.' + k, cv[k], { min: 0, max: 9999 }))));
-    const idx = { liberty: 1, utility: 2, morality: 3 };
-    $('#general-conv2').replaceChildren(...C.map(([k, l]) => field(l, numInput('bonusconv.' + k, b[idx[k]].v, { adv: true }))));
+  // -- part 1: story chart
+  function partStoryChart(p, w) {
+    const ct = el('table');
+    ct.append(el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, 'Node'), el('th', {}, 'Title'), el('th', {}, 'f0'), el('th', {}, 'f1'), el('th', {}, 'f2'), el('th', {}, 'f3'))));
+    const cb = el('tbody');
+    for (const [node, fl] of Object.entries(w.storyChart)) {
+      const g = GD.chart[node] || [];
+      cb.append(el('tr', {}, el('td', {}, String(g[0] || '')), el('td', { class: 'iid' }, node), el('td', {}, [g[1], g[2]].filter(Boolean).join(' — ')),
+        ...fl.map((f, i) => el('td', {}, boolInput(`story.${node}.${i}`, f.v, { adv: true })))));
+    }
+    ct.append(cb);
+    p.append(card(['Story chart ', advTag()], note('Four flags per chart node as stored by the game (meanings unconfirmed). Chapter progress itself is driven by the CHAPTER_START/END flags on the Event flags tab.'),
+      el('div', { class: 'scroll' }, ct)));
   }
 
-  // -- inventory
+  // -- part 2: choices
+  function partChoices(p, w) {
+    const box = rowsBox('choices');
+    box.append(...Object.entries(w.selections).map(([id, f]) => row(id, id.replace('SELECT_PARAM_', ''), null, boolInput('choice.' + id, f.v, { adv: true }))));
+    p.append(card(['Dialogue choices ', advTag()], note('One flag per decision option the game tracks.'), filterBox('Filter choices…', box), box));
+  }
+
+  // -- part 4: convictions
+  function partConvictions(p, w) {
+    const cv = summary.convictions, b = w.f3bb00.b;
+    const C = [['utility', 'Utility'], ['morality', 'Morality'], ['liberty', 'Liberty']], idx = { liberty: 1, utility: 2, morality: 3 };
+    p.append(card('Convictions', note('The game clamps each conviction to 0–9999.'),
+      el('div', { class: 'grid' }, ...C.map(([k, l]) => field(l, numInput('conviction.' + k, cv[k], { min: 0, max: 9999 })))),
+      el('h3', { class: 'adv-title' }, 'Second conviction array ', advTag()),
+      note('A second int[4] stored right after the convictions (meaning unknown; 50 for Utility in the sample save).'),
+      el('div', { class: 'grid' }, ...C.map(([k, l]) => field(l, numInput('bonusconv.' + k, b[idx[k]].v, { adv: true })))),
+      rawView(() => w.f3bb00, { label: 'Whole part, incl. the sets after the arrays (read-only)' })));
+  }
+
+  // -- part 15: place emblems. Each place set has up to 3 name variants that differ only in the emblem
+  // (GOP_PlaceNameSet / GOP_PlaceName.eEmblemType); the save stores which variant is shown.
+  function partPlaces(p, w) {
+    const emblemName = code => (GD.emblems || {})[code] || code || '?';
+    const box = rowsBox('places');
+    box.append(...w.f5df20.map(x => {
+      const variants = (GD.placeEmblems || {})[x.id] || [];
+      const cur = el('span', { class: 'new' });
+      const input = numInput('place.' + x.id, x.v.v, { adv: true, min: 0, max: variants.length ? variants.length - 1 : undefined });
+      const show = () => { const v = Number(input.value); cur.textContent = `→ ${variants[v] !== undefined ? emblemName(variants[v]) : 'unknown variant'}`; };
+      input.addEventListener('input', show); show();
+      const sub = `${x.id} · ${variants.map((c, i) => `${i} ${emblemName(c)}`).join(', ') || 'variants unknown'}`;
+      return row(x.id, GD.places[x.id] || x.id, sub, input, cur);
+    }));
+    p.append(card(['Place emblems ', advTag()],
+      note('Which name banner each place shows. A place has up to three variants that differ only in the emblem, i.e. which faction controls it; the value is the variant index. In the sample only the Grand Norzelian Mines show a non-default emblem (Aesfrost).'),
+      filterBox('Filter places…', box), box));
+  }
+
+  // -- parts 17 and 18: inventory and accessories (adding an id puts it in the right table of either part)
   function itemRow(id, count, isNew) {
     const n = itemName(id);
     return row(id, n || id, n ? id : null, numInput('item.' + id, count, { min: 0, max: CAT.max[id] }), isNew ? el('span', { class: 'new' }, 'new') : null);
   }
   const tableFor = id => TSCore.groupForNewId(save.s1, id);
-  function renderInventory() {
-    const box = $('#inventory'); box.replaceChildren();
-    const tables = { ...summary.inventory, accessories: summary.accessories };
+  function itemTables(box, tables) {
+    box.replaceChildren();
     for (const [name, items] of Object.entries(tables)) {
       const ids = Object.keys(items);
       const extra = [...added].filter(id => tableFor(id) === name);
       if (!ids.length && !extra.length) continue;
-      const rows = el('div', { class: 'rows' },
-        ...ids.sort((a, b) => (itemName(a) || a).localeCompare(itemName(b) || b)).map(id => itemRow(id, items[id], false)),
-        ...extra.map(id => itemRow(id, original.get('item.' + id), true)));
       box.append(el('div', { class: 'inv-table', dataset: { table: name } },
-        el('h3', {}, `${INV_LABEL[name] || 'Accessories owned'} (${ids.length + extra.length})`), rows));
+        el('h3', {}, `${INV_LABEL[name] || 'Accessories owned'} (${ids.length + extra.length})`),
+        el('div', { class: 'rows' },
+          ...ids.sort((a, b) => (itemName(a) || a).localeCompare(itemName(b) || b)).map(id => itemRow(id, items[id], false)),
+          ...extra.map(id => itemRow(id, original.get('item.' + id), true)))));
     }
-    const owned = new Set(Object.values(tables).flatMap(t => Object.keys(t)));
-    const suggest = TSCore.knownItemIds(save.s1).filter(id => /^(ITEM_|BATTLE_ACCESSARY_)/.test(id) && !owned.has(id) && !added.has(id) && tableFor(id));
-    $('#known-ids').replaceChildren(...suggest.map(id => el('option', { value: id, label: itemName(id) ? `${itemName(id)} (${id})` : id })));
-    applyInvFilter();
   }
-  $('#inv-filter').addEventListener('input', applyInvFilter);
-  function applyInvFilter() {
-    filterRows($('#inventory'), $('#inv-filter').value);
-    document.querySelectorAll('#inventory .inv-table').forEach(t => { t.hidden = !t.querySelector('.row:not([hidden])'); });
+  function itemToolbar(box, prefix, what) {
+    const filter = el('input', { type: 'search', placeholder: `Filter ${what}…` });
+    const applyFilter = () => {
+      filterRows(box, filter.value);
+      box.querySelectorAll('.inv-table').forEach(t => { t.hidden = !t.querySelector('.row:not([hidden])'); });
+    };
+    filter.addEventListener('input', applyFilter);
+    const listId = 'known-' + prefix;
+    const owned = new Set([...Object.values(summary.inventory), summary.accessories].flatMap(t => Object.keys(t)));
+    const suggest = TSCore.knownItemIds(save.s1).filter(id => id.startsWith(prefix) && !owned.has(id) && !added.has(id) && tableFor(id));
+    const list = el('datalist', { id: listId }, ...suggest.map(id => el('option', { value: id, label: itemName(id) ? `${itemName(id)} (${id})` : id })));
+    const addId = el('input', { list: listId, placeholder: `${what[0].toUpperCase() + what.slice(1, -1)} to add (name or id)`, size: '34' });
+    const addCount = el('input', { type: 'number', min: '0', value: '1', class: 'num' });
+    const addBtn = el('button', { type: 'button' }, 'Add');
+    addBtn.addEventListener('click', () => {
+      const typed = addId.value.trim(), n = Number(addCount.value);
+      const byName = Object.keys(CAT.names).find(k => k.startsWith(prefix) && CAT.names[k] && CAT.names[k].toLowerCase() === typed.toLowerCase());
+      const id = byName || typed.toUpperCase();
+      try {
+        if (!id.startsWith(prefix) || !/^[A-Z0-9_]+$/.test(id)) throw new Error(`Ids here look like ${prefix === 'ITEM_' ? 'ITEM_BATTLE_HEAL_ALL' : 'BATTLE_ACCESSARY_HP_RING'}.`);
+        if (!Number.isInteger(n) || n < 0) throw new Error('Count must be a whole number ≥ 0.');
+        const isOwned = [...Object.values(summary.inventory), summary.accessories].some(t => id in t);
+        if (isOwned || added.has(id)) throw new Error(`${id} is already owned; edit its count instead.`);
+        if (!tableFor(id)) throw new Error(`Don't know which table ${id} belongs to.`);
+        added.add(id); original.set('item.' + id, undefined); edits.set('item.' + id, n);
+        showError(''); render(); updateBar();
+      } catch (e) { showError(e.message); }
+    });
+    return el('div', { class: 'toolbar' }, filter, el('span', { class: 'spacer' }), addId, list, addCount, addBtn);
   }
-  $('#add-btn').addEventListener('click', () => {
-    const typed = $('#add-id').value.trim(), n = Number($('#add-count').value);
-    const byName = Object.keys(CAT.names).find(k => CAT.names[k] && CAT.names[k].toLowerCase() === typed.toLowerCase());
-    const id = byName || typed.toUpperCase();
-    try {
-      if (!/^(ITEM|BATTLE_ACCESSARY)_[A-Z0-9_]+$/.test(id)) throw new Error('Ids look like ITEM_BATTLE_HEAL_ALL or BATTLE_ACCESSARY_HP_RING.');
-      if (!Number.isInteger(n) || n < 0) throw new Error('Count must be a whole number ≥ 0.');
-      const owned = [...Object.values(summary.inventory), summary.accessories].some(t => id in t);
-      if (owned || added.has(id)) throw new Error(`${id} is already in the inventory; edit its count instead.`);
-      if (!tableFor(id)) throw new Error(`Don't know which inventory table ${id} belongs to.`);
-      added.add(id); original.set('item.' + id, undefined); edits.set('item.' + id, n);
-      $('#add-id').value = ''; showError('');
-      renderInventory(); updateBar();
-    } catch (e) { showError(e.message); }
-  });
+  function partInventory(p) {
+    const box = el('div');
+    itemTables(box, summary.inventory);
+    p.append(card('Inventory', note('Five tables: key items & notes, battle items, an unused table, upgrade materials, class medals.'),
+      itemToolbar(box, 'ITEM_', 'items'), box));
+  }
+  function partAccessories(p, w) {
+    const box = el('div');
+    itemTables(box, { accessories: summary.accessories });
+    p.append(card('Accessories', itemToolbar(box, 'BATTLE_ACCESSARY_', 'accessories'), box,
+      rawView(() => w.f39570[1], { label: `Second map (${w.f39570[1].length} entries; meaning unknown, read-only)` })));
+  }
 
-  function renderOrdersShop() {
-    const w = save.s1.world;
-    $('#orders').replaceChildren(...w.f39000.map(o => row(o.id, o.id.replace('BATTLE_ORDER_TEST_', '').replace(/_/g, ' '), o.id,
+  // -- part 19: battle orders
+  function partOrders(p, w) {
+    const box = rowsBox('orders');
+    box.append(...w.f39000.map(o => row(o.id, o.id.replace('BATTLE_ORDER_TEST_', '').replace(/_/g, ' '), o.id,
       el('span', { class: 'pair' }, numInput(`order.${o.id}.count`, o.v.v, { adv: true, min: 0 }), boolInput(`order.${o.id}.on`, o.f.v, { adv: true })))));
-    $('#shop').replaceChildren(...w.f5caf0.map((s, i) => row(s.id, itemName(s.id) || s.id, `${s.id} · shop ${s.a}/${s.b}`, numInput(`shop.${i}`, s.c.v, { adv: true, min: 0 }))));
-  }
-  $('#shop-filter').addEventListener('input', () => filterRows($('#shop'), $('#shop-filter').value));
-
-  // -- units
-  function renderUnits() {
-    const t = $('#units'); t.replaceChildren();
-    t.append(el('thead', {}, el('tr', {}, el('th', {}, 'Unit'), el('th', {}, 'Class'), ...UNIT_COLS.map(c => el('th', {}, c.toUpperCase())), el('th', {}, 'SPD'), el('th', {}, 'Accessories'))));
-    const body = el('tbody');
-    for (const u of summary.units) {
-      const pid = u.id.replace('UNIT_MASTER_CH_', '');
-      body.append(el('tr', {},
-        el('td', { title: u.id }, `${unitName(u.id)} `, el('span', { class: 'iid' }, pid)),
-        el('td', { title: u.class }, GD.jobs[u.class] || u.class.replace('BATTLE_JOB_CH_', '')),
-        ...UNIT_COLS.map(c => el('td', {}, numInput(`unit.${pid}.${c}`, u[c], { min: 0 }))),
-        el('td', {}, String(u.speed)),
-        el('td', { class: 'small' }, u.equippedAccessories.map(a => itemName('BATTLE_' + a) || a).join(', '))));
-    }
-    t.append(body);
+    p.append(card(['Battle orders ', advTag()], note('Count and the second flag as stored by the game (meaning of the flag unconfirmed).'), box));
   }
 
-  // -- story
-  function renderStory() {
-    const w = save.s1.world, flags = save.s1.flags;
-    const flagVal = id => { const e = flags && flags.entries.find(x => x.id === id); return e ? e.v.v : undefined; };
-    const seen = new Set(w.f3b880.filter(x => x.a === 2).map(x => x.id));
-    const st = $('#stories'); st.replaceChildren(el('thead', {}, el('tr', {}, el('th', {}, 'Character'), el('th', {}, 'Story'), el('th', {}, 'Unlocked'), el('th', {}, 'Viewed'), el('th', {}, 'Unlock flag'))));
-    const sb = el('tbody');
-    for (const [id, unit, title, sub, flag] of GD.stories) {
-      const v = flagVal(flag);
-      sb.append(el('tr', { title: id }, el('td', {}, unitName(unit)), el('td', {}, `${title}${sub ? ' — ' + sub : ''}`),
-        el('td', {}, v === undefined ? '—' : boolInput('flag.' + flag, v)), el('td', {}, seen.has(id) ? '✓' : ''), el('td', { class: 'iid' }, flag)));
-    }
-    st.append(sb);
-    // character-story achievement tracker (FUN_140c68e10 map)
-    const at = $('#charach');
-    at.replaceChildren(el('thead', {}, el('tr', {}, el('th', {}, 'Unit'), el('th', {}, 'Stories unlocked'), el('th', {}, 'Flag 6'), el('th', {}, 'Flag 7'), el('th', {}, 'Flag 8'), el('th', {}, 'Slot'), el('th', {}, 'Achievement'))));
+  // -- part 20: shop stock
+  function partShop(p, w) {
+    const box = rowsBox('shop');
+    box.append(...w.f5caf0.map((s, i) => row(s.id, itemName(s.id) || s.id, `${s.id} · shop ${s.a}/${s.b}`, numInput(`shop.${i}`, s.c.v, { adv: true, min: 0 }))));
+    p.append(card(['Shop stock ', advTag()], note('Remaining stock per shop entry.'), filterBox('Filter…', box), box,
+      rawView(() => w.f5caf0, { label: 'All fields (read-only)' })));
+  }
+
+  // -- part 21: seen list
+  function partSeen(p, w) {
+    const groups = {};
+    for (const x of w.f3b880) (groups[x.a] = groups[x.a] || []).push(x.id);
+    p.append(card('Seen notes, stories, tutorials & information', note('What was opened in the menus. Read-only. The Event flags tab shows "Viewed" for character stories from this list.'),
+      ...Object.entries(groups).map(([a, ids]) => el('details', {}, el('summary', {}, `${SEEN_CAT[a] || 'Category ' + a} (${ids.length})`), el('div', { class: 'idlist' }, ids.join('\n'))))));
+  }
+
+  // -- part 22: achievement counters and the character-story achievement tracker
+  function partCounters(p, w) {
+    const counters = rowsBox('counters');
+    counters.append(...w.fc68e10.set.slice().sort((a, b) => a.a - b.a).map(c =>
+      row(String(c.a), achievementLabel(c.a), `#${c.a} · ${ACHIEVEMENT_TYPE[c.a] || 'unknown type'}`, numInput('counter.' + c.a, c.v.v, { min: 0 }))));
+    const flagVal = id => { const e = save.s1.flags && save.s1.flags.entries.find(x => x.id === id); return e ? e.v.v : undefined; };
+    const at = el('table');
+    at.append(el('thead', {}, el('tr', {}, el('th', {}, 'Unit'), el('th', {}, 'Stories unlocked'), el('th', {}, 'Flag 6'), el('th', {}, 'Flag 7'), el('th', {}, 'Flag 8'), el('th', {}, 'Slot'), el('th', {}, 'Achievement'))));
     const ab = el('tbody');
     for (const e of w.fc68e10.map) {
       const pid = e.id.replace('UNIT_MASTER_CH_', ''), [f6, f7, f8, slot] = e.b.map(x => x.v);
@@ -276,24 +451,57 @@
       refresh();
     }
     at.append(ab);
-    const ct = $('#chart'); ct.replaceChildren(el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, 'Node'), el('th', {}, 'Title'), el('th', {}, 'f0'), el('th', {}, 'f1'), el('th', {}, 'f2'), el('th', {}, 'f3'))));
-    const cb = el('tbody');
-    for (const [node, fl] of Object.entries(w.storyChart)) {
-      const g = GD.chart[node] || [];
-      cb.append(el('tr', {}, el('td', {}, String(g[0] || '')), el('td', { class: 'iid' }, node), el('td', {}, [g[1], g[2]].filter(Boolean).join(' — ')),
-        ...fl.map((f, i) => el('td', {}, boolInput(`story.${node}.${i}`, f.v, { adv: true })))));
-    }
-    ct.append(cb);
-    $('#choices').replaceChildren(...Object.entries(w.selections).map(([id, f]) => row(id, id.replace('SELECT_PARAM_', ''), null, boolInput('choice.' + id, f.v, { adv: true }))));
+    p.append(
+      card('Achievement counters', note('Progress toward each Steam achievement, by the game\'s achievement type (the id is the type\'s number in its EAchievementType enum). Only types that have been touched are stored. The game caps each value at that achievement\'s target (e.g. 100 battle wins), so a value at its target usually means the achievement is unlocked; one-off achievements store 1. Raising one can unlock the achievement the next time the game updates that type.'), counters),
+      card('Character-story achievements',
+        note('Per-unit tracker the game keeps for the character-story achievements. It sets flags 6, 7 and 8 when that unit\'s world-map story events of those types finish. At the moment the last of the three becomes 1, it unlocks Steam ',
+          el('code', {}, 'ACHIEVEMENT_(080 + slot)'), '. Ticking all three in the save does not fire it, because the game must set the last flag itself. To re-send a missing achievement (verified in game), take a unit with exactly one flag still off and set its slot (advanced) to the target. Then play that unit\'s story from the world map. The Character Stories re-watch menu does not count. Steam only receives achievements that aren\'t unlocked yet.'),
+        el('div', { class: 'scroll' }, at)));
   }
-  $('#choice-filter').addEventListener('input', () => filterRows($('#choices'), $('#choice-filter').value));
 
-  // -- progress
-  function renderProgress() {
-    const w = save.s1.world;
-    $('#counters').replaceChildren(...w.fc68e10.set.slice().sort((a, b) => a.a - b.a).map(c =>
-      row(String(c.a), `Counter ${c.a}${c.a === 40 ? ' (gold earned)' : ''}`, null, numInput('counter.' + c.a, c.v.v, { min: 0 }))));
-    const flags = save.s1.flags;
+  // -- part 23: units
+  function partUnits(p, w) {
+    const t = el('table');
+    t.append(el('thead', {}, el('tr', {}, el('th', {}, 'Unit'), el('th', {}, 'Class'), ...UNIT_COLS.map(c => el('th', {}, c.toUpperCase())), el('th', {}, 'SPD'), el('th', {}, 'Accessories'))));
+    const body = el('tbody');
+    for (const u of summary.units) {
+      const pid = u.id.replace('UNIT_MASTER_CH_', '');
+      body.append(el('tr', {},
+        el('td', { title: u.id }, `${unitName(u.id)} `, el('span', { class: 'iid' }, pid)),
+        el('td', { title: u.class }, GD.jobs[u.class] || u.class.replace('BATTLE_JOB_CH_', '')),
+        ...UNIT_COLS.map(c => el('td', {}, numInput(`unit.${pid}.${c}`, u[c], { min: 0 }))),
+        el('td', {}, String(u.speed)),
+        el('td', { class: 'small' }, u.equippedAccessories.map(a => itemName('BATTLE_' + a) || a).join(', '))));
+    }
+    t.append(body);
+    const sel = el('select', {}, ...w.units.map((u, i) => el('option', { value: i }, `Unit ${i}: ${unitName(u.p.base.master)}`)));
+    const pre = el('pre', { class: 'raw' });
+    const show = () => { pre.textContent = jsonText(w.units[+sel.value]); };
+    sel.addEventListener('change', show); show();
+    p.append(
+      card('Units', note('Level and EXP are the safest edits. The game may recompute other stats from level and class when the save loads.'), el('div', { class: 'scroll wide' }, t)),
+      card('Full unit record (read-only)', el('div', { class: 'toolbar' }, sel), pre));
+  }
+
+  // -- part 24: world tail (money)
+  function partTail(p, w) {
+    p.append(card('Money', el('div', { class: 'grid' }, field('Gold', numInput('money', summary.money, { min: 0 }))),
+      rawView(() => w.tail, { label: 'Whole part: leader name, money and the values after it (read-only)' })));
+  }
+
+  // -- event flags tab (the flag table after the world object) and the character-story unlock flags
+  function renderFlags() {
+    const w = save.s1.world, flags = save.s1.flags;
+    const flagVal = id => { const e = flags && flags.entries.find(x => x.id === id); return e ? e.v.v : undefined; };
+    const seen = new Set(w.f3b880.filter(x => x.a === 2).map(x => x.id));
+    const st = $('#stories'); st.replaceChildren(el('thead', {}, el('tr', {}, el('th', {}, 'Character'), el('th', {}, 'Story'), el('th', {}, 'Unlocked'), el('th', {}, 'Viewed'), el('th', {}, 'Unlock flag'))));
+    const sb = el('tbody');
+    for (const [id, unit, title, sub, flag] of GD.stories) {
+      const v = flagVal(flag);
+      sb.append(el('tr', { title: id }, el('td', {}, unitName(unit)), el('td', {}, `${title}${sub ? ' — ' + sub : ''}`),
+        el('td', {}, v === undefined ? '—' : boolInput('flag.' + flag, v)), el('td', {}, seen.has(id) ? '✓' : ''), el('td', { class: 'iid' }, flag)));
+    }
+    st.append(sb);
     const box = $('#flags');
     if (!flags) { box.replaceChildren(el('p', { class: 'note' }, 'The event-flag table was not found in this save.')); }
     else {
@@ -306,11 +514,6 @@
       }));
     }
     applyFlagFilter();
-    $('#places').replaceChildren(...w.f5df20.map(p => row(p.id, GD.places[p.id] || p.id, GD.places[p.id] ? p.id : null, numInput('place.' + p.id, p.v.v, { adv: true }))));
-    const seen = $('#seen'); seen.replaceChildren();
-    const groups = {};
-    for (const x of w.f3b880) (groups[x.a] = groups[x.a] || []).push(x.id);
-    for (const [a, ids] of Object.entries(groups)) seen.append(el('details', {}, el('summary', {}, `${SEEN_CAT[a] || 'Category ' + a} (${ids.length})`), el('div', { class: 'idlist' }, ids.join('\n'))));
   }
   const applyFlagFilter = () => {
     const only = $('#flag-set-only').checked;
@@ -320,40 +523,6 @@
   };
   $('#flag-filter').addEventListener('input', applyFlagFilter);
   $('#flag-set-only').addEventListener('change', applyFlagFilter);
-
-  // -- raw (read-only)
-  function renderRaw() {
-    const w = save.s1.world;
-    const blocks = {
-      'Slot preview (s0)': () => ({ ...TSCore.preview(save.p, save.ss[0]), thumb: '(image)' }),
-      'Header & play-time counter': () => save.s1.head,
-      'Vote events (FUN_140d5f240)': () => w.f240,
-      'Conviction block (FUN_140d3bb00)': () => w.f3bb00,
-      'Location (FUN_140d5c5a0)': () => w.location,
-      'Field pickups': () => w.pickups,
-      'Map actors (first 200 of FUN_140d38d30)': () => w.rec60.slice(0, 200),
-      'Unit attached data (FUN_140d5d170)': () => w.f5d170,
-      'Misc small blocks': () => ({ f5bdc0: w.f5bdc0, f3c8f0: w.f3c8f0, f3c640: w.f3c640, f5e2e0: w.f5e2e0, f5b7d0: w.f5b7d0, flags4dc: w.flags4dc, f3b880_count: w.f3b880.length }),
-      'Lifetime counters + unit flags (FUN_140c68e10)': () => w.fc68e10,
-      'World tail': () => w.tail,
-      ...Object.fromEntries(w.units.map((u, i) => [`Unit ${i} ${unitName(u.p.base.master)} (full record)`, () => u])),
-    };
-    const sel = $('#raw-block');
-    sel.replaceChildren(...Object.keys(blocks).map(k => el('option', { value: k }, k)));
-    const show = () => {
-      const v = blocks[sel.value]();
-      const text = JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toString() : (x && x.buffer instanceof ArrayBuffer && x.length !== undefined && !Array.isArray(x) ? `<${x.length} bytes>` : x), 1);
-      $('#raw').textContent = text.length > 300000 ? text.slice(0, 300000) + '\n… (truncated)' : text;
-      $('#raw-size').textContent = `${(text.length / 1024).toFixed(1)} KB`;
-    };
-    sel.onchange = show; show();
-  }
-
-  // ---- tabs ---------------------------------------------------------------------------------------
-  document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
-    document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
-    document.querySelectorAll('.panel').forEach(p => { p.hidden = p.dataset.panel !== b.dataset.tab; });
-  }));
 
   // ---- footer: reset / download -------------------------------------------------------------------
   function updateBar() {

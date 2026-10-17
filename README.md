@@ -12,19 +12,28 @@ Feedback, bugs or feature requests: please [open an issue on GitHub](https://git
 
 ## What it shows and edits
 
+The tabs follow the save file: one tab for each of the 24 parts of the game-state object, in the order
+they are stored, plus an Event flags tab. Each tab shows the part's position and size, the values you can
+edit, and read-only raw data for anything whose meaning is not known yet.
+
 | Tab | Editable | Read-only |
 |---|---|---|
-| Money & convictions | gold; Utility / Morality / Liberty | — |
-| Inventory | item, material, medal and accessory counts; add any item or accessory the game defines (names shown in English) | — |
-| Units | level, EXP, HP, move, jump, STR/INT/DEF/MDF/DEX/AGI/LUK for all units (with character and class names) | speed, equipped accessories |
-| Story | character-story unlock flags (73 stories); character-story achievement tracker (flags 6/7/8, slot in advanced mode) | whether each story was viewed in the menu; which Steam achievement each unit's tracker fires |
-| Progress | achievement counters (e.g. #40 = total gold earned) | notes, information and tutorials seen |
-| Raw data | — | everything else the parser decodes (vote events, location, map actors, full unit records, …) |
+| 1 Story chart, 2 Choices | story-chart node flags; dialogue choices | — |
+| 4 Convictions | Utility / Morality / Liberty; a second conviction array | the rest of the part |
+| 15 Place emblems | which emblem (controlling faction) each place's name banner shows | each variant's faction |
+| 17 Inventory, 18 Accessories | item, material, medal and accessory counts; add any item or accessory the game defines (names shown in English) | a second, empty accessory map |
+| 19 Battle orders, 20 Shop stock | order counts and flags; shop stock | other shop fields |
+| 21 Seen list | — | notes, stories, tutorials and information opened in the menus |
+| 22 Counters | achievement counters (e.g. #40 = total gold earned); character-story achievement tracker (flags 6/7/8, slot in advanced mode) | which Steam achievement each unit's tracker fires |
+| 23 Units | level, EXP, HP, move, jump, STR/INT/DEF/MDF/DEX/AGI/LUK for all units (with character and class names) | speed, equipped accessories, full unit records |
+| 24 Money | gold | leader name and other values |
+| 3, 5–14, 16 | — | vote events, small unknown blocks, pickups, location, map actors (first 200), name flags, unit data |
+| Event flags | character-story unlock flags (73 stories); all 2,361 story/event flags as toggles | whether each story was viewed |
 
 Turning on **Advanced editing** (bottom bar) unlocks values whose meaning is not confirmed:
 - the 2,361 story/event flags
 - story-chart node flags and dialogue choices
-- battle orders, shop stock and places visited
+- battle orders, shop stock and place emblems
 - a second conviction array
 
 ## Use

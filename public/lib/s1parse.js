@@ -258,8 +258,8 @@ const unit = r => {
 
 function parseS1(buf, off, len, opts = {}) {
   const r = new R(buf, off, off + len);
-  if (opts.trace) r.trace = opts.trace;
-  const out = {};
+  const out = { marks: [] };   // [label, plaintext offset] at the start of each parsed part
+  r.trace = (label, o) => { out.marks.push([label, o]); if (opts.trace) opts.trace(label, o); };
   // FUN_140d5cea0
   out.head = { ver: r.i32(), b: r.u8(), playCs: r.at(r.u64) };
   r.mark('FUN_140d3b260');
@@ -276,7 +276,7 @@ function parseS1(buf, off, len, opts = {}) {
   r.mark('location'); w.location = f5c5a0(r);
   r.mark('rec60'); w.rec60 = r.arr(rec60);
   r.mark('f5b7d0'); w.f5b7d0 = f5b7d0(r);
-  w.flags4dc = r.rep(4, r => r.bool());
+  r.mark('flags4dc'); w.flags4dc = r.rep(4, r => r.bool());
   r.mark('f3a4e0'); w.f3a4e0 = nameBoolSet(r);
   r.mark('f5df20'); w.f5df20 = nameIntMap(r);
   r.mark('f5d170'); w.f5d170 = f5d170(r, opts.version || 0x39);
