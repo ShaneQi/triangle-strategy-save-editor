@@ -229,7 +229,7 @@
         el('td', {}, v === undefined ? '—' : boolInput('flag.' + flag, v)), el('td', {}, seen.has(id) ? '✓' : ''), el('td', { class: 'iid' }, flag)));
     }
     st.append(sb);
-    // character-story achievement tracker (FUN_140c68e10 map; see cli/charstory.js)
+    // character-story achievement tracker (FUN_140c68e10 map)
     const at = $('#charach');
     at.replaceChildren(el('thead', {}, el('tr', {}, el('th', {}, 'Unit'), el('th', {}, 'Stories unlocked'), el('th', {}, 'Flag 6'), el('th', {}, 'Flag 7'), el('th', {}, 'Flag 8'), el('th', {}, 'Slot'), el('th', {}, 'Achievement'))));
     const ab = el('tbody');

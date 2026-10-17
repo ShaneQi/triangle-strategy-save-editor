@@ -99,5 +99,3 @@ Netlify, Cloudflare Pages or S3. It works from a sub-path and needs no server co
 | `public/lib/catalog.js` | every ownable inventory id the game defines, with English names: 42 battle items, 31 materials, 2 medals and 49 accessories |
 | `public/lib/gamedata.js` | character and class names, character stories with their unlock flags, story-chart titles and place names |
 | `public/sample/sample.js` | a sample save (base64, ~1 MB), loaded only when you click "Load sample save" |
-| `cli/` | Node command-line tools: `tssave.js` (info, dump, set, export, decode, encode) and `charstory.js` (character-story achievements) |
-| `context/` | developer handoff: format notes, reverse-engineering log, scripts, raw session material; `context/local/` is git-ignored (key, game files, sample saves) |

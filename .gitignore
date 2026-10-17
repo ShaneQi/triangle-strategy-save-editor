@@ -1,12 +1,6 @@
-# Local-only material for the next agent: pak AES key, extracted game files, sample saves.
-# Never commit these.
-context/local/
-
-# never commit save files, keys, extracted game files or caches anywhere else either
+# never commit save files or keys
 *.sav
 *.key
-pakx/
-gproj/
 node_modules/
 .DS_Store
 Thumbs.db

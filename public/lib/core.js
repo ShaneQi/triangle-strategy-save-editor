@@ -1,5 +1,5 @@
-// Triangle Strategy (PC, UE4.27 "Newera") save codec + edit model. Shared by the CLI (tssave.js)
-// and the web app. Runs in Node (real Buffer) and browsers (load bytes.js and s1parse.js first).
+// Triangle Strategy (PC, UE4.27 "Newera") save codec + edit model, used by the web app.
+// Runs in Node (real Buffer) and browsers (load bytes.js and s1parse.js first).
 //
 // File layout:
 //   GVAS header (UE SaveGame) -> class /Script/Newera.SaveGameData | SaveSystemData

@@ -120,6 +120,7 @@ const f3b880 = r => r.arr(r => ({ a: r.u8(), id: r.name() }));
 const fc68e10 = r => ({ set: r.arr(r => ({ a: r.u8(), v: r.at(r.i32) })), map: r.arr(r => ({ id: r.name(), b: r.rep(4, r => r.at(r.u8)) })) });
 // map entries: per-unit character-story achievement tracker {u8 flag6, u8 flag7, u8 flag8, u8 slot}
 // (FUN_140c562d0 sets flagN when that unit's world-map event of type N finishes; all three -> ACHIEVEMENT_(080+slot))
+// N is EWorldIconType: 6 SUB_JO (recruitment story), 7 SUB_HA (story part 1), 8 SUB_KYU (story part 2)
 
 // ---- units (FUN_140decb40) -------------------------------------------------------------------
 // Polymorphic ability objects: {int32 flag, FName id, effect}; the effect layout depends on the
