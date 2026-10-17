@@ -37,9 +37,14 @@
 
       <!-- One tab per part of the world object (s1, FUN_140d3b260), in save order; built by app.js -->
       <nav id="tabs" class="tabs" role="tablist"></nav>
+      <p class="hint tabs-hint"><span class="star" aria-hidden="true">★</span> marks the tabs most worth editing: money,
+        convictions, inventory, accessories, units and achievement counters. The rest show everything else in the save.</p>
       <div id="panels"></div>
 
+      <!-- s1 function 6, the flag manager (FUN_140ef66e0): script variables, the event flag table, then a few fields -->
       <div class="panel" data-panel="flags" hidden>
+        <p id="fn6-meta" class="part-meta"></p>
+        <div id="fn6-vars"></div>
         <div class="card">
           <h2>Character stories</h2>
           <p class="note">"Unlocked" is the story's unlock flag from the game's character-story table. "Viewed" means it was
@@ -57,6 +62,7 @@
             <label class="chk"><input id="flag-set-only" type="checkbox"> set only</label><span id="flag-count" class="hint"></span></div>
           <div id="flags" class="rows"></div>
         </div>
+        <div id="fn6-after"></div>
       </div>
     </section>
 

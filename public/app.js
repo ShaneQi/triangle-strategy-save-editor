@@ -195,6 +195,11 @@
   }
 
   // n, parser mark (where the part starts), serializer, tab label, renderer(panel, w)
+  // tabs most worth editing: the meaning is known and the edit is practical (★ in the tab bar)
+  const KEY_PARTS = {
+    4: 'convictions', 17: 'items, materials and medals (and adding new ones)', 18: 'accessories (and adding new ones)',
+    22: 'achievement counters and the character-story achievement re-send (verified in game)', 23: 'unit level, EXP and stats', 24: 'gold',
+  };
   const PARTS = [
     [1, 'storyChart', 'FUN_140d5e9a0', 'Story chart', partStoryChart],
     [2, 'selections', 'FUN_140d5e370', 'Choices', partChoices],
@@ -224,6 +229,118 @@
   ];
   let currentTab = 'part1';
 
+  // s1 functions 3-5 (n, serializer, tab label, next mark, renderer); 6 is the flag manager tab
+  const FUNCS = [
+    [3, 'FUN_140d39a50', 'Map & battle', 'fn4', fnMap],
+    [4, 'FUN_140d5c7e0', 'Camera', 'fn5', fnCamera],
+    [5, 'FUN_140d5ce30 (FUN_14114f070)', 'World map', 'fn6', fnWorldMap],
+  ];
+  function fnStarts() { const at = {}; for (const [l, o] of save.s1.marks) if (!(l in at)) at[l] = o; return at; }
+  function fnData(n) {
+    const t = save.s1.tail, f = save.s1.flags;
+    if (n === 1) return save.s1.head;
+    if (n === 6) return { sysGlobals: t ? t.sysGlobals : null, flags: f };
+    if (!t) return null;
+    if (n === 4) return t.fn4;
+    if (n === 5) return t.fn5 || null;
+    const { fn4, fn5, sysGlobals, ...fn3 } = t;
+    return fn3;
+  }
+  // "Part 1 of 24: … · FUN_… · s1+0x… · N bytes [Download JSON]"
+  function metaLine(title, fn, s1Offset, len, file, get) {
+    const dl = el('button', { type: 'button', class: 'ghost small', title: 'Everything the parser read for this, as JSON (byte arrays as hex)' }, 'Download JSON');
+    dl.addEventListener('click', () => downloadText(`${fileName.replace(/\.sav$/i, '')}-${file}.json`, fullJson(get())));
+    return el('p', { class: 'part-meta' }, el('strong', {}, title), ` · ${fn}`,
+      s1Offset != null ? ` · s1+${hex(s1Offset)} · ${len.toLocaleString()} bytes ` : ' ', dl);
+  }
+  const f32 = i => new Float32Array(Int32Array.of(i).buffer)[0];
+  const num = x => (Number.isInteger(x) ? String(x) : String(+x.toFixed(4)));
+  const kv = pairs => el('dl', { class: 'kv' }, ...pairs.flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]));
+  const simpleTable = (head, rows) => el('div', { class: 'scroll' }, el('table', {},
+    el('thead', {}, el('tr', {}, ...head.map(h => el('th', {}, h)))), el('tbody', {}, ...rows.map(r => el('tr', {}, ...r.map(c => el('td', {}, c)))))));
+
+  // -- s1 function 3: map / battle state (FUN_140d39a50)
+  function fnMap(p, t) {
+    const m = t.map, sc = m.scene;
+    if (sc) {
+      const panelRec = sc.panels[0], g = panelRec && panelRec.grids[0];
+      const kids = [note('The map the save was made on and its battle panel grid (one panel record and one grid in the sample). Each tile has a terrain name and a value of 1–3 that is probably its height (inferred).'),
+        kv([['Map', m.name], ['Panel record', panelRec ? panelRec.names.join(', ') : '—'], ['Grid', g ? `${g.w} × ${g.h} (${g.cells.length} tiles)` : '—']])];
+      if (g) {
+        const terr = {};
+        for (const c of g.cells) terr[c.name] = (terr[c.name] || 0) + 1;
+        kids.push(simpleTable(['Terrain', 'Tiles'], Object.entries(terr).map(([k, v]) => [k.replace('TEXT_COMMON_PANEL_NAME_', '').toLowerCase(), String(v)])));
+        if (g.cells.length === g.w * g.h) {
+          kids.push(el('div', { class: 'mapgrid', style: `grid-template-columns: repeat(${g.w}, 1fr)`, role: 'img', 'aria-label': `Panel grid, ${g.w} by ${g.h}, coloured by terrain` },
+            ...g.cells.map((c, i) => el('span', { class: 'tile ' + (/STONE/.test(c.name) ? 'stone' : 'soil'), dataset: { h: Math.min(c.b0, 3) },
+              title: `#${i} (${i % g.w}, ${Math.floor(i / g.w)}) · ${c.name.replace('TEXT_COMMON_PANEL_NAME_', '').toLowerCase()} · ${c.b0}` }))));
+          kids.push(el('p', { class: 'hint' }, 'Tiles in stored order, row by row. Darker = higher value (1–3). Hover a tile for its index, terrain and value.'));
+        }
+      }
+      p.append(card('Map & panel grid', ...kids));
+    } else p.append(card('Map', kv([['Map', m.name], ['Panel scene', 'none']])));
+    const teamName = v => ({ 0: 'same', 1: 'ally', 2: 'enemy' })[v] || String(v);
+    if (t.objs.length) p.append(card('Teams', note('One record per team. Each holds a byte per team; the pattern (0 on the diagonal) reads as a relationship table: 0 = same team, 1 = allied, 2 = hostile (inferred). Unit lists are empty outside battle.'),
+      simpleTable(['Team', ...t.objs.map((_, i) => `→ ${i}`), 'Units'], t.objs.map(o => [String(o.b), ...o.bytes.map(b => `${b} (${teamName(b)})`), String(o.units.length)]))));
+    if (t.d3a770) {
+      const d = t.d3a770, names = l => l.length ? l.map(x => unitName(x.n || x)).join(', ') : '—';
+      p.append(card('Deployment (probably)', note('Grid slots with x/y and the unit placed there, then unit lists and a number per unit. Looks like the battle-preparation lineup; the lists\' and numbers\' meanings are unknown.'),
+        simpleTable(['x', 'y', 'b', 'Unit', 'Flag'], d.a.map(s => [String(s.i), String(s.j), String(s.b), s.n === 'None' ? '—' : unitName(s.n), s.f ? '✓' : ''])),
+        kv([['List 1', d.b.map(x => unitName(x.n) + (x.f ? ' ✓' : '')).join(', ') || '—'], ['List 2', names(d.c)], ['List 3', names(d.d)], ['List 4', names(d.e)]]),
+        simpleTable(['Unit', 'Value (float)'], d.f.map(x => [unitName(x.n), num(f32(x.v))]))));
+    }
+    p.append(card('Everything else', note(`Battle actors: ${m.actorsA.length} + ${m.actorsB.length} (none outside battle). The remaining ints, maps and lists are below; their meanings are unknown.`),
+      rawView(() => fnData(3), { label: 'Whole function (read-only)' })));
+  }
+
+  // -- s1 function 4: camera and player (FUN_140d5c7e0)
+  function fnCamera(p, t) {
+    const f = t.fn4, x = f.xformE0;
+    p.append(card('Camera', note('Five camera values. In the sample they equal the script variable STAND_BY_MODE_CAMERA_PARAMS (function 6), so this is the encampment camera.'),
+      f.cam ? el('p', {}, f.cam.map(num).join(', ')) : el('p', {}, 'none')),
+    card('Player and transform', kv([
+      ['Player actor', f.hasPlayer ? `${f.player}` : 'none'],
+      ['Transform position', x.t.map(num).join(', ')], ['Rotation (quaternion)', x.q.map(num).join(', ')], ['Scale', x.s.map(num).join(', ')],
+      ['Name', f.n164], ['Object FUN_140f95270', f.f95270 ? `${f.f95270.length} entries` : 'not in this save'],
+    ]), note('Meaning of the transform is unknown (probably the player\'s or the camera target\'s last position).'), rawView(() => fnData(4), { label: 'Whole function (read-only)' })));
+  }
+
+  // -- s1 function 5: world-map state (FUN_14114f070)
+  const iconLabel = id => {
+    const ev = id.replace(/^WORLD_ICON_/, '');
+    const story = GD.stories.find(s => s[4] && s[4].replace(/^WI_END_|_EX$/g, '') === ev);
+    if (story) return `${story[2]}${story[3] ? ': ' + story[3] : ''}`;
+    const ic = (GD.icons || {})[ev];
+    return [chapterOf(ev), ic && (ICON_TYPE[ic[0]] || ic[0]), ic && ic[1]].filter(Boolean).join(' · ') || null;
+  };
+  function fnWorldMap(p, t) {
+    const f = t.fn5;
+    if (!f) { p.append(card(null, note('Not in this save (the game writes it only when the world map exists).'))); return; }
+    const same = JSON.stringify([...f.icons].sort()) === JSON.stringify([...f.icons2].sort());
+    p.append(card('World map', kv([['Values', `${f.a}, ${f.b} (probably current and previous location)`], ['Vector', f.v.map(num).join(', ')],
+      ['Bytes / int', `${f.b1fc}, ${f.b20c} / ${f.i200}`], ['Transforms', `${f.list.length} entries`], ['Second icon set', same ? 'same as the first' : `${f.icons2.length} names`]])),
+    card(`World-map icons (${f.icons.length})`, note('World-map icons held by the world-map scene. Not unlock state: all character-story icons are listed regardless of progress.'),
+      el('div', { class: 'rows' }, ...f.icons.map(id => row(id, iconLabel(id) || id, iconLabel(id) ? id : null, el('span')))),
+      rawView(() => fnData(5), { label: 'Whole function (read-only)' })));
+  }
+
+  // -- s1 function 6 extras: script variables before the flag table, fields after it
+  function renderFn6Extras(t) {
+    const flags = save.s1.flags;
+    if (t) {
+      const box = rowsBox('sysvars');
+      box.append(...t.sysGlobals.map(g => row(g.name, g.name, null, el('span', { class: 'val' }, typeof g.v === 'string' ? `"${g.v}"` : String(g.v)))));
+      $('#fn6-vars').replaceChildren(card(['Script variables ', el('span', { class: 'tag' }, 'read-only')],
+        note('The game\'s ELuaSysGlobal variables, written just before the flag table: battle bookkeeping, vote outcomes per chapter, story position (SCENARIO_ANCHOR), the level and weather before a quest, music. Names come from the game; values are ints or strings.'),
+        filterBox('Filter variables…', box), box));
+    } else $('#fn6-vars').replaceChildren();
+    $('#fn6-after').replaceChildren(flags ? card('After the flag table', kv([
+      ['String', flags.nextStr === undefined ? '—' : `"${flags.nextStr}"`],
+      ['String list', flags.after ? (flags.after.strings.length ? flags.after.strings.join(', ') : 'empty') : 'not parsed'],
+      ['Int', flags.after ? String(flags.after.i7340) : 'not parsed'],
+      ['String map', flags.after ? (flags.after.map.length ? flags.after.map.map(e => `${e.k} = ${e.v}`).join(', ') : 'empty') : 'not parsed']])) : '');
+  }
+
   // start offset and size of each part, from the parser's marks (units are one mark per unit)
   function partRanges() {
     const m = save.s1.marks, at = {}, out = {};
@@ -239,21 +356,47 @@
     const w = save.s1.world, ranges = partRanges(), s1off = save.ss[1].off;
     const nav = $('#tabs'), panels = $('#panels');
     nav.replaceChildren(); panels.replaceChildren();
+    // s1 function 1, the header (FUN_140d5cea0); function 2 is the world object (tabs 1-24)
+    {
+      const h = save.s1.head, worldAt = fnStarts().FUN_140d3b260;
+      nav.append(el('button', { role: 'tab', dataset: { tab: 'fn1' }, class: 'fn-tab' }, 'F1 Header'));
+      const cs = Number(h.playCs.v), s = Math.floor(cs / 100), pv = TSCore.preview(save.p, save.ss[0]);
+      const hms = x => `${Math.floor(x / 3600)}h ${String(Math.floor(x / 60) % 60).padStart(2, '0')}m ${String(x % 60).padStart(2, '0')}s`;
+      panels.append(el('div', { class: 'panel', dataset: { panel: 'fn1' } },
+        metaLine('s1 function 1 of 6: Header', 'FUN_140d5cea0', 0, worldAt - s1off, 's1-function1-header', () => fnData(1)),
+        card(['Header ', el('span', { class: 'tag' }, 'read-only')],
+          note('The first thing in the game state, before the world object (function 2, tabs 1–24).'),
+          kv([['Int', `${h.ver} (0x${h.ver.toString(16)})`], ['Byte', String(h.b)],
+            ['Play time', `${hms(s)} (${cs.toLocaleString()} hundredths of a second)`],
+            ['Slot preview play time', `${hms(pv.playSeconds)}${pv.playSeconds === s ? ' (matches)' : ''}`]]))));
+    }
     for (const [n, mark, fn, label, renderPart] of PARTS) {
-      nav.append(el('button', { role: 'tab', dataset: { tab: 'part' + n } }, `${n} ${label}`));
+      const key = KEY_PARTS[n];
+      nav.append(el('button', { role: 'tab', dataset: { tab: 'part' + n }, class: key ? 'key' : null, title: key ? `Most worth editing: ${key}` : null },
+        key ? el('span', { class: 'star', 'aria-hidden': 'true' }, '★ ') : null, `${n} ${label}`));
       const [o, len] = ranges[mark];
-      const dl = el('button', { type: 'button', class: 'ghost small', title: 'Everything the parser read for this part, as JSON (byte arrays as hex)' }, 'Download JSON');
-      dl.addEventListener('click', () => downloadText(
-        `${fileName.replace(/\.sav$/i, '')}-part${String(n).padStart(2, '0')}-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`,
-        fullJson(mark === 'worldTail' ? w.tail : w[mark])));
       const panel = el('div', { class: 'panel', dataset: { panel: 'part' + n } },
-        el('p', { class: 'part-meta' }, el('strong', {}, `Part ${n} of 24: ${label}`),
-          ` · ${fn} · s1+${hex(o - s1off)} · ${len.toLocaleString()} bytes `, dl));
+        metaLine(`Part ${n} of 24: ${label}`, fn, o - s1off, len,
+          `part${String(n).padStart(2, '0')}-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, () => (mark === 'worldTail' ? w.tail : w[mark])));
       renderPart(panel, w);
       panels.append(panel);
     }
-    nav.append(el('button', { role: 'tab', dataset: { tab: 'flags' } }, 'Event flags'));
+    // s1 functions 3-6, after the world object (function 2). Function 6's panel is the static one in index.html.
+    const t = save.s1.tail, fat = fnStarts();
+    for (const [n, fn, label, next, renderFn] of FUNCS) {
+      nav.append(el('button', { role: 'tab', dataset: { tab: 'fn' + n }, class: 'fn-tab' }, `F${n} ${label}`));
+      const panel = el('div', { class: 'panel', dataset: { panel: 'fn' + n } },
+        metaLine(`s1 function ${n} of 6: ${label}`, fn, t ? fat['fn' + n] - s1off : null, t ? fat[next] - fat['fn' + n] : null,
+          `s1-function${n}-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, () => fnData(n)));
+      if (t) renderFn(panel, t);
+      else panel.append(card(null, note(`Not parsed for this save: ${save.s1.tailError || 'unknown reason'}. The event flag table was found by searching for it instead.`)));
+      panels.append(panel);
+    }
+    nav.append(el('button', { role: 'tab', dataset: { tab: 'flags' }, class: 'fn-tab' }, 'F6 Flags & variables'));
+    $('#fn6-meta').replaceChildren(...metaLine('s1 function 6 of 6: Flags & variables', 'FUN_140ef66e0 (FUN_140ef6310)',
+      t ? fat.fn6 - s1off : null, t ? fat.end - fat.fn6 : null, 's1-function6-flags-and-variables', () => fnData(6)).childNodes);
     renderFlags();
+    renderFn6Extras(t);
     nav.querySelectorAll('button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
     showTab(currentTab);
     updateBar();

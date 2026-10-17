@@ -12,9 +12,11 @@ Feedback, bugs or feature requests: please [open an issue on GitHub](https://git
 
 ## What it shows and edits
 
-The tabs follow the save file: one tab for each of the 24 parts of the game-state object, in the order
-they are stored, plus an Event flags tab. Each tab shows the part's position and size, the values you can
-edit, and read-only raw data for anything whose meaning is not known yet.
+The tabs follow the save file. Tabs 1–24 are the 24 parts of the game-state object, in the order they are
+stored. Tabs F1 and F3–F6 are the rest of the game state, one per save function (F1 is the small header before the object, which is function 2). Each tab shows its position and
+size, the values you can edit, and read-only raw data for anything whose meaning is not known yet; a
+**Download JSON** button saves everything parsed for it. A ★ marks the tabs most worth editing: 24 Money,
+4 Convictions, 17 Inventory, 18 Accessories, 23 Units and 22 Counters.
 
 | Tab | Editable | Read-only |
 |---|---|---|
@@ -28,7 +30,9 @@ edit, and read-only raw data for anything whose meaning is not known yet.
 | 23 Units | level, EXP, HP, move, jump, STR/INT/DEF/MDF/DEX/AGI/LUK for all units (with character and class names) | speed, equipped accessories, full unit records |
 | 24 Money | gold | leader name and other values |
 | 3, 5–14, 16 | — | vote events, small unknown blocks, pickups, location, map actors (first 200), name flags, unit data |
-| Event flags | character-story unlock flags (73 stories); all 2,361 story/event flags as toggles | whether each story was viewed |
+| F1 Header | — | a version-like int, a byte, total play time |
+| F3 Map & battle, F4 Camera, F5 World map | — | the current map's battle grid (terrain per tile), team relations, deployment slots, camera, world-map icons |
+| F6 Flags & variables | character-story unlock flags (73 stories); all 2,361 story/event flags as toggles | script variables (vote outcomes, story position, music…); whether each story was viewed |
 
 Turning on **Advanced editing** (bottom bar) unlocks values whose meaning is not confirmed:
 - the 2,361 story/event flags
