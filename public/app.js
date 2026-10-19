@@ -630,8 +630,8 @@
     for (const [id, unit, title, sub] of GD.stories)
       sb.append(el('tr', { title: id }, el('td', {}, unitName(unit)), el('td', {}, `${title}${sub ? ' — ' + sub : ''}`), el('td', {}, seen.has(id) ? '✓' : '')));
     st.append(sb);
-    p.append(card('Seen notes, stories, tutorials & information', note('What was opened in the menus. Read-only.'),
-      ...Object.entries(groups).map(([a, ids]) => el('details', {}, el('summary', {}, `${SEEN_CAT[a] || 'Category ' + a} (${ids.length})`), el('div', { class: 'idlist' }, ids.join('\n'))))),
+    p.append(card('Seen notes, tutorials & information', note('What was opened in the menus. Read-only. Character stories have their own card below.'),
+      ...Object.entries(groups).filter(([a]) => a !== '2').map(([a, ids]) => el('details', {}, el('summary', {}, `${SEEN_CAT[a] || 'Category ' + a} (${ids.length})`), el('div', { class: 'idlist' }, ids.join('\n'))))),
       card('Character stories viewed', note(`${GD.stories.filter(s => seen.has(s[0])).length} of ${GD.stories.length} opened in the Character Stories menu. Read-only. Their unlock flags are in tab F6.`),
         el('div', { class: 'scroll' }, st)));
   }
