@@ -47,9 +47,17 @@
         <div id="fn6-vars"></div>
         <div class="card">
           <h2>Character stories</h2>
-          <p class="note">"Unlocked" is the story's unlock flag from the game's character-story table. "Viewed" means it was
-            opened in the Character Stories menu (read-only). Unlocking through the flag has not been tested in game.</p>
+          <p class="note">Each story's unlock flag, as named in the game's character-story table. Whether a story was opened
+            in the Character Stories menu is in tab 21 (Seen list). Unlocking through the flag has not been tested in game.</p>
           <div class="scroll"><table id="stories"></table></div>
+        </div>
+        <div class="card">
+          <h2>Cats</h2>
+          <p class="note">The 10 cats Serenoa can talk to, by map. Each has two flags: talked to in this playthrough, and
+            in any playthrough (kept in New Game+). A cat counts toward Feline Fanatic when either is set; the game checks
+            all 10 from its scripts (read from the game's code). Changing these has not been tested in game.</p>
+          <p id="cat-count" class="hint"></p>
+          <div class="scroll"><table id="cats"></table></div>
         </div>
         <div class="card">
           <h2>Event flags <span class="tag">advanced</span></h2>

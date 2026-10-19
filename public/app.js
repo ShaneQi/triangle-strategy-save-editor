@@ -141,6 +141,11 @@
     const orig = original.get(key);
     if (Number.isInteger(v) && v !== orig) edits.set(key, v); else if (v === orig) edits.delete(key);
     if (node) node.classList.toggle('changed', edits.has(key));
+    // A flag can have two checkboxes (a story's or cat's flag is also in the event-flag list): keep them in step.
+    document.querySelectorAll(`input[type=checkbox][data-key="${CSS.escape(key)}"]`).forEach(i => {
+      i.checked = !!v; i.classList.toggle('changed', edits.has(key));
+    });
+    if (key.startsWith('flag.EV_CAT_TALK_')) catCount();
     updateBar();
   }
   $('#advanced').addEventListener('change', () => {
@@ -618,8 +623,17 @@
   function partSeen(p, w) {
     const groups = {};
     for (const x of w.f3b880) (groups[x.a] = groups[x.a] || []).push(x.id);
-    p.append(card('Seen notes, stories, tutorials & information', note('What was opened in the menus. Read-only. The Event flags tab shows "Viewed" for character stories from this list.'),
-      ...Object.entries(groups).map(([a, ids]) => el('details', {}, el('summary', {}, `${SEEN_CAT[a] || 'Category ' + a} (${ids.length})`), el('div', { class: 'idlist' }, ids.join('\n'))))));
+    // Character stories (category 2) by name: every story in the game's table, ticked if this list holds it
+    const seen = new Set(groups[2] || []), st = el('table');
+    st.append(el('thead', {}, el('tr', {}, el('th', {}, 'Character'), el('th', {}, 'Story'), el('th', {}, 'Viewed'))));
+    const sb = el('tbody');
+    for (const [id, unit, title, sub] of GD.stories)
+      sb.append(el('tr', { title: id }, el('td', {}, unitName(unit)), el('td', {}, `${title}${sub ? ' — ' + sub : ''}`), el('td', {}, seen.has(id) ? '✓' : '')));
+    st.append(sb);
+    p.append(card('Seen notes, stories, tutorials & information', note('What was opened in the menus. Read-only.'),
+      ...Object.entries(groups).map(([a, ids]) => el('details', {}, el('summary', {}, `${SEEN_CAT[a] || 'Category ' + a} (${ids.length})`), el('div', { class: 'idlist' }, ids.join('\n'))))),
+      card('Character stories viewed', note(`${GD.stories.filter(s => seen.has(s[0])).length} of ${GD.stories.length} opened in the Character Stories menu. Read-only. Their unlock flags are in tab F6.`),
+        el('div', { class: 'scroll' }, st)));
   }
 
   // -- part 22: achievement counters and the character-story achievement tracker
@@ -627,13 +641,11 @@
     const counters = rowsBox('counters');
     counters.append(...w.fc68e10.set.slice().sort((a, b) => a.a - b.a).map(c =>
       row(String(c.a), achievementLabel(c.a), `#${c.a} · ${ACHIEVEMENT_TYPE[c.a] || 'unknown type'}`, numInput('counter.' + c.a, c.v.v, { min: 0 }))));
-    const flagVal = id => { const e = save.s1.flags && save.s1.flags.entries.find(x => x.id === id); return e ? e.v.v : undefined; };
     const at = el('table');
-    at.append(el('thead', {}, el('tr', {}, el('th', {}, 'Unit'), el('th', {}, 'Stories unlocked'), el('th', {}, 'Flag 6'), el('th', {}, 'Flag 7'), el('th', {}, 'Flag 8'), el('th', {}, 'Slot'), el('th', {}, 'Achievement'))));
+    at.append(el('thead', {}, el('tr', {}, el('th', {}, 'Unit'), el('th', {}, 'Flag 6'), el('th', {}, 'Flag 7'), el('th', {}, 'Flag 8'), el('th', {}, 'Slot'), el('th', {}, 'Achievement'))));
     const ab = el('tbody');
     for (const e of w.fc68e10.map) {
       const pid = e.id.replace('UNIT_MASTER_CH_', ''), [f6, f7, f8, slot] = e.b.map(x => x.v);
-      const mine = GD.stories.filter(s => s[1] === e.id), unlocked = mine.filter(s => flagVal(s[4]) === 1).length;
       const status = el('td', { class: 'small' });
       const refresh = () => {
         const cur = k => { const key = `charach.${pid}.${k}`; return edits.has(key) ? edits.get(key) : original.get(key); };
@@ -643,7 +655,6 @@
       const flagBox = (k, v) => { const i = boolInput(`charach.${pid}.${k}`, v); i.addEventListener('change', refresh); return i; };
       const slotIn = numInput(`charach.${pid}.slot`, slot, { adv: true, min: 0, max: 28 }); slotIn.addEventListener('input', refresh);
       ab.append(el('tr', { title: e.id }, el('td', {}, `${unitName(e.id)} `, el('span', { class: 'iid' }, pid)),
-        el('td', {}, mine.length ? `${unlocked} / ${mine.length}` : '—'),
         el('td', {}, flagBox('f6', f6)), el('td', {}, flagBox('f7', f7)), el('td', {}, flagBox('f8', f8)), el('td', {}, slotIn), status));
       refresh();
     }
@@ -657,9 +668,20 @@
   }
 
   // -- part 23: units
+  // Attendance input plus the battles each of the unit's character stories needs (game data), ticked once reached
+  function attendanceCell(u, pid) {
+    const inp = numInput(`unit.${pid}.attendance`, u.attendance, { min: 0 }), need = (GD.attendance || {})[u.id] || [];
+    if (!need.length) return el('td', {}, inp);
+    const story = id => { const s = GD.stories.find(x => x[0] === id); return s ? `${s[2]}${s[3] ? ' — ' + s[3] : ''}` : id; };
+    const hint = el('span', { class: 'iid', title: need.map(([n, id]) => `${story(id)}: ${n} battles`).join('\n') });
+    const refresh = () => { const v = +inp.value || 0; hint.textContent = ' stories at ' + need.map(([n]) => n + (v >= n ? ' ✓' : '')).join(' / '); };
+    inp.addEventListener('input', refresh); refresh();
+    return el('td', {}, inp, hint);
+  }
   function partUnits(p, w) {
     const t = el('table');
-    t.append(el('thead', {}, el('tr', {}, el('th', {}, 'Unit'), el('th', {}, 'Class'), ...UNIT_COLS.map(c => el('th', {}, c.toUpperCase())), el('th', {}, 'SPD'), el('th', {}, 'Accessories'))));
+    t.append(el('thead', {}, el('tr', {}, el('th', {}, 'Unit'), el('th', {}, 'Class'), ...UNIT_COLS.map(c => el('th', {}, c.toUpperCase())), el('th', {}, 'SPD'),
+      el('th', { title: 'Battles the unit has fought' }, 'Attendance'), el('th', {}, 'Accessories'))));
     const body = el('tbody');
     for (const u of summary.units) {
       const pid = u.id.replace('UNIT_MASTER_CH_', '');
@@ -668,6 +690,7 @@
         el('td', { title: u.class }, GD.jobs[u.class] || u.class.replace('BATTLE_JOB_CH_', '')),
         ...UNIT_COLS.map(c => el('td', {}, numInput(`unit.${pid}.${c}`, u[c], { min: 0 }))),
         el('td', {}, String(u.speed)),
+        attendanceCell(u, pid),
         el('td', { class: 'small' }, u.equippedAccessories.map(a => itemName('BATTLE_' + a) || a).join(', '))));
     }
     t.append(body);
@@ -676,7 +699,7 @@
     const show = () => { pre.textContent = jsonText(w.units[+sel.value]); };
     sel.addEventListener('change', show); show();
     p.append(
-      card('Units', note('Level and EXP are the safest edits. The game may recompute other stats from level and class when the save loads.'), el('div', { class: 'scroll wide' }, t)),
+      card('Units', note('Level and EXP are the safest edits. The game may recompute other stats from level and class when the save loads. Attendance is how many battles the unit has fought; it carries over to New Game+, and each of its character stories appears only once attendance reaches the requirement for that story. Beside it are those requirements from the game data (✓ = reached; hover for the story names); a story also needs its chapter reached. Editing attendance has not been tested in game.'), el('div', { class: 'scroll wide' }, t)),
       card('Full unit record (read-only)', el('div', { class: 'toolbar' }, sel), pre));
   }
 
@@ -686,19 +709,32 @@
       rawView(() => w.tail, { label: 'Whole part: leader name, money and the values after it (read-only)' })));
   }
 
-  // -- event flags tab (the flag table after the world object) and the character-story unlock flags
+  // -- event flags tab (the flag table after the world object): character-story unlock flags, cats, every flag
   function renderFlags() {
-    const w = save.s1.world, flags = save.s1.flags;
+    const flags = save.s1.flags;
     const flagVal = id => { const e = flags && flags.entries.find(x => x.id === id); return e ? e.v.v : undefined; };
-    const seen = new Set(w.f3b880.filter(x => x.a === 2).map(x => x.id));
-    const st = $('#stories'); st.replaceChildren(el('thead', {}, el('tr', {}, el('th', {}, 'Character'), el('th', {}, 'Story'), el('th', {}, 'Unlocked'), el('th', {}, 'Viewed'), el('th', {}, 'Unlock flag'))));
+    const st = $('#stories'); st.replaceChildren(el('thead', {}, el('tr', {}, el('th', {}, 'Character'), el('th', {}, 'Story'), el('th', {}, 'Unlocked'), el('th', {}, 'Unlock flag'))));
     const sb = el('tbody');
     for (const [id, unit, title, sub, flag] of GD.stories) {
       const v = flagVal(flag);
       sb.append(el('tr', { title: id }, el('td', {}, unitName(unit)), el('td', {}, `${title}${sub ? ' — ' + sub : ''}`),
-        el('td', {}, v === undefined ? '—' : boolInput('flag.' + flag, v)), el('td', {}, seen.has(id) ? '✓' : ''), el('td', { class: 'iid' }, flag)));
+        el('td', {}, v === undefined ? '—' : boolInput('flag.' + flag, v)), el('td', { class: 'iid' }, flag)));
     }
     st.append(sb);
+    // Cats: one EV_CAT_TALK_<level> pair each (this run, _EX any run). Feline Fanatic needs every cat with
+    // either flag set (FUN_140c5b9b0). The level names a map; its place name comes from PLACENAMESET_<level>.
+    const cats = flags ? flags.entries.filter(f => /^EV_CAT_TALK_/.test(f.id) && !f.id.endsWith('_EX')).map(f => f.id.slice(12)) : [];
+    const ct = $('#cats'); ct.replaceChildren(el('thead', {}, el('tr', {}, el('th', {}, 'Where'), el('th', {}, 'Map'),
+      el('th', {}, 'This playthrough'), el('th', {}, 'Any playthrough'))));
+    const cb = el('tbody');
+    for (const lv of cats) {
+      const L = lv.toUpperCase(), place = GD.places['PLACENAMESET_' + L] || GD.places['PLACENAMESET_' + L.replace(/\d+$/, '')];
+      cb.append(el('tr', {}, el('td', {}, place ? place.replace(' - –', ' –') : lv), el('td', { class: 'iid' }, lv),
+        el('td', {}, boolInput('flag.EV_CAT_TALK_' + lv, flagVal('EV_CAT_TALK_' + lv))),
+        el('td', {}, boolInput('flag.EV_CAT_TALK_' + lv + '_EX', flagVal('EV_CAT_TALK_' + lv + '_EX')))));
+    }
+    ct.append(cb);
+    catCount();
     const box = $('#flags');
     if (!flags) { box.replaceChildren(el('p', { class: 'note' }, 'The event-flag table was not found in this save.')); }
     else {
@@ -711,6 +747,13 @@
       }));
     }
     applyFlagFilter();
+  }
+  function catCount() {
+    const rows = [...document.querySelectorAll('#cats tbody tr')], on = r => [...r.querySelectorAll('input')].map(i => i.checked);
+    const any = rows.filter(r => on(r).some(Boolean)).length, now = rows.filter(r => on(r)[0]).length;
+    $('#cat-count').textContent = rows.length
+      ? `${any} of ${rows.length} talked to in some playthrough (Feline Fanatic needs all ${rows.length}); ${now} in this one.`
+      : 'This save has no cat flags.';
   }
   const applyFlagFilter = () => {
     const only = $('#flag-set-only').checked;

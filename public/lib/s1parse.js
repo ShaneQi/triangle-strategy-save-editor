@@ -252,7 +252,8 @@ const unit = r => {
   u.accessories = [...u.rawAbilitiesAccessories.toString('latin1').matchAll(/BATTLE_ABILITY_ACCESSARY_[A-Z0-9_]+/g)].map(m => m[0].replace('BATTLE_ABILITY_', ''));
   r.o = j.end;
   u.list430 = j.list;
-  u.i440 = r.i32(); u.b445 = r.u8(); u.b446 = r.u8(); u.f444 = r.bool(); u.b447 = r.u8();
+  u.i440 = r.at(r.i32);   // +0x440 battle-attendance count (FUN_140d2ff30)
+  u.b445 = r.u8(); u.b446 = r.u8(); u.f444 = r.bool(); u.b447 = r.u8();
   return u;
 };
 

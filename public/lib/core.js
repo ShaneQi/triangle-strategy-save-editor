@@ -179,6 +179,7 @@
         const st = u.p.stats.map(x => x.v), o = { id: u.p.base.master, class: u.list430.map(x => x.id).join(',') };
         for (const [k, i] of Object.entries(UNIT_STAT)) o[k] = st[i];
         o.speed = Buffer.from(Int32Array.of(st[7]).buffer).readFloatLE(0);
+        o.attendance = u.i440.v;
         o.equippedAccessories = u.accessories;
         return o;
       }),
@@ -198,6 +199,7 @@
   // ---- edit keys --------------------------------------------------------------------------------
   // Every editable value has a key that resolves (against a fresh parse) to { at, type }.
   //   money | conviction.<liberty|utility|morality> | bonusconv.<…> | unit.<P001>.<stat>
+  //   unit.<P001>.attendance battles the unit has fought (unit +0x440; character-story requirements)
   //   item.<ID> (existing; a missing ITEM_/BATTLE_ACCESSARY_ id is appended)
   //   note.<ID>              0|1: note owned (inventory map 0); 1 appends the entry, 0 deletes it
   //   counter.<n>            lifetime/achievement counter (FUN_140c68e10)
@@ -219,6 +221,7 @@
       case 'bonusconv': return k[1] in CONVICTION ? I(w.f3bb00.b[CONVICTION[k[1]]]) : null;
       case 'unit': {
         const u = w.units.find(u => u.p.base.master.endsWith('_' + k[1]) || u.p.base.master === k[1]);
+        if (u && k[2] === 'attendance') return I(u.i440);
         return u && k[2] in UNIT_STAT ? I(u.p.stats[UNIT_STAT[k[2]]]) : null;
       }
       case 'item': { const id = k.slice(1).join('.'); for (const m of [...w.f5bd60, ...w.f39570]) { const e = find(m, id); if (e) return I(e.v); } return null; }

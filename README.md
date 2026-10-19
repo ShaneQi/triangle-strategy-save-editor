@@ -25,15 +25,15 @@ size, the values you can edit, and read-only raw data for anything whose meaning
 | 15 Place emblems | which emblem (controlling faction) each place's name banner shows | each variant's faction |
 | 17 Inventory, 18 Accessories | notes as checkboxes (tick a missing note to add it, untick one to delete it; all 70 listed); item, material, medal and accessory counts; add any item or accessory the game defines (names shown in English) | a second, empty accessory map |
 | 19 Battle orders, 20 Shop stock | order counts and flags; shop stock | other shop fields |
-| 21 Seen list | — | notes, stories, tutorials and information opened in the menus |
+| 21 Seen list | — | notes, stories, tutorials and information opened in the menus; each character story by name with whether it was viewed |
 | 22 Counters | achievement counters (e.g. #40 = total gold earned); character-story achievement tracker (flags 6/7/8, slot in advanced mode) | which Steam achievement each unit's tracker fires |
-| 23 Units | level, EXP, HP, move, jump, STR/INT/DEF/MDF/DEX/AGI/LUK for all units (with character and class names) | speed, equipped accessories, full unit records |
+| 23 Units | level, EXP, HP, move, jump, STR/INT/DEF/MDF/DEX/AGI/LUK and battle attendance (battles fought, shown with the battles each of the unit's character stories needs) for all units (with character and class names) | speed, equipped accessories, full unit records |
 | 24 Money | gold | leader name and other values |
 | 3, 5–14, 16 | — | vote events, small unknown blocks, pickups, location, map actors (first 200), name flags, unit data |
 | F1 Header | — | a version-like int, a byte, total play time |
 | F3 Map & battle, F4 Camera, F5 World map | — | the current map's battle grid (terrain per tile), team relations, deployment slots, camera, world-map icons |
 | S2 Scene state | — | the level's clock (time of day), weather/environment values, level actors with saved state |
-| F6 Flags & variables | character-story unlock flags (73 stories); all 2,361 story/event flags as toggles | script variables (vote outcomes, story position, music…); whether each story was viewed |
+| F6 Flags & variables | character-story unlock flags (73 stories); the 10 cats (talked to this playthrough / any playthrough); all 2,361 story/event flags as toggles | script variables (vote outcomes, story position, music…) |
 
 Turning on **Advanced editing** (bottom bar) unlocks values whose meaning is not confirmed:
 - the 2,361 story/event flags
