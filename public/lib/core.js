@@ -159,6 +159,7 @@
   function reparse(save) {
     save.ss = sections(save.p);
     save.s1 = S1.parseS1(save.p, save.ss[1].off, save.ss[1].len, { version: save.version });
+    save.s2 = S1.parseS2(save.p, save.ss[2].off, save.ss[2].len);   // read-only; s2.error if not understood
     return save;
   }
 

@@ -247,11 +247,11 @@
     return fn3;
   }
   // "Part 1 of 24: … · FUN_… · s1+0x… · N bytes [Download JSON]"
-  function metaLine(title, fn, s1Offset, len, file, get) {
+  function metaLine(title, fn, s1Offset, len, file, get, area = 's1') {
     const dl = el('button', { type: 'button', class: 'ghost small', title: 'Everything the parser read for this, as JSON (byte arrays as hex)' }, 'Download JSON');
     dl.addEventListener('click', () => downloadText(`${fileName.replace(/\.sav$/i, '')}-${file}.json`, fullJson(get())));
     return el('p', { class: 'part-meta' }, el('strong', {}, title), ` · ${fn}`,
-      s1Offset != null ? ` · s1+${hex(s1Offset)} · ${len.toLocaleString()} bytes ` : ' ', dl);
+      s1Offset != null ? ` · ${area}+${hex(s1Offset)} · ${len.toLocaleString()} bytes ` : ' ', dl);
   }
   const f32 = i => new Float32Array(Int32Array.of(i).buffer)[0];
   const num = x => (Number.isInteger(x) ? String(x) : String(+x.toFixed(4)));
@@ -322,6 +322,25 @@
     card(`World-map icons (${f.icons.length})`, note('World-map icons held by the world-map scene. Not unlock state: all character-story icons are listed regardless of progress.'),
       el('div', { class: 'rows' }, ...f.icons.map(id => row(id, iconLabel(id) || id, iconLabel(id) ? id : null, el('span')))),
       rawView(() => fnData(5), { label: 'Whole function (read-only)' })));
+  }
+
+  // -- s2: GameState save data (time of day, environment, level actors)
+  function renderS2(p, s2) {
+    if (!s2) return;
+    if (s2.error || !s2.clock) {
+      p.append(card(null, note(s2.error ? `Not fully understood for this save: ${s2.error}. Download JSON has what was read.` : 'Only the flag is present (no GameState data in this save).')));
+      return;
+    }
+    const hhmm = x => `${String(Math.floor(x / 3600)).padStart(2, '0')}:${String(Math.floor(x / 60) % 60).padStart(2, '0')}`;
+    const c = s2.clock.f;
+    p.append(card('Scene state', note('Written by the level\'s GameState after s1: a few flags, a clock, the environment/weather component, and level actors whose state the game keeps. Read-only; most meanings are inferred.'),
+      kv([['Flag / bools', `${s2.flag} / ${s2.bools.map(b => (b ? '1' : '0')).join(', ')}`],
+        ['Clock', `${hhmm(c[0])} and ${hhmm(c[4])} (seconds of the day: ${num(c[0])}, ${num(c[4])}); rate ${num(c[10])}`],
+        ['Environment', `${s2.env.i430.map(num).join(', ')} · ${num(s2.env.f448)}, ${num(s2.env.f44c)} · optional block ${s2.env.hasExtra ? 'present' : 'absent'}`],
+        ['Component +0x2A8', `${s2.c2a8.i.join(', ')} · ${s2.c2a8.b.join(', ')} · lists empty`]])),
+    card(`Level actors (${s2.actors.length})`, note('Actors in the current level whose state is saved (rain, smoke, post-processing, visibility…), with their tags.'),
+      simpleTable(['Actor', 'Tags', 'Values'], s2.actors.map(a => [a.name, a.tags.join(', ') || '—', [...a.i, a.n, ...a.j].join(', ')]))),
+    card('Everything', rawView(() => s2, { label: 'Whole s2 (read-only)' })));
   }
 
   // -- s1 function 6 extras: script variables before the flag table, fields after it
@@ -397,6 +416,12 @@
       t ? fat.fn6 - s1off : null, t ? fat.end - fat.fn6 : null, 's1-function6-flags-and-variables', () => fnData(6)).childNodes);
     renderFlags();
     renderFn6Extras(t);
+    // s2: the GameState's save data (after all of s1)
+    nav.append(el('button', { role: 'tab', dataset: { tab: 's2' }, class: 'fn-tab' }, 'S2 Scene state'));
+    const s2panel = el('div', { class: 'panel', dataset: { panel: 's2' } },
+      metaLine('s2: scene state', 'GameState vtable+0x6C8 (FUN_140e0fbe0)', 0, save.ss[2].len, 's2-scene-state', () => save.s2, 's2'));
+    renderS2(s2panel, save.s2);
+    $('#panels').append(s2panel);
     nav.querySelectorAll('button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
     showTab(currentTab);
     updateBar();

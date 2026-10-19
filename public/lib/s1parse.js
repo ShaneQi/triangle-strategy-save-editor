@@ -453,6 +453,48 @@ function findFlagTable(b, from, end) {
   return null;
 }
 
-if (typeof module === 'object' && module.exports) module.exports = { R, parseS1 };
-else root.TSParse = { R, parseS1 };
+// ---- s2: the GameState's save data ---------------------------------------------------------------------
+// The game-data writer (FUN_140e0b020) writes an int32 flag (1 for a normal save), then, if the world's
+// GameState exists and is an ANeweraGameStateBase, its vtable+0x6C8 serializer. Base and world-map
+// GameStates use FUN_140e0fbe0 (below). The battle (FUN_140e0fd60) and research (FUN_140e0fdb0)
+// GameStates call it and then write more; that part is not implemented, so such saves get s2.error.
+const i32s = (r, n) => r.rep(n, r => r.i32());
+const f32s = (r, n) => r.rep(n, r => r.f32());
+function parseS2(buf, off, len) {
+  const end = off + len, r = new R(buf, off, end), out = { flag: r.i32() };
+  if (r.o === end) return out;   // flag only: no GameState was written
+  try {
+    out.bools = r.rep(3, r => r.bool());                                     // +0x280..+0x282
+    // FUN_140f955c0 (GameState +0x298): int32, 11 floats (time of day in seconds twice, a rate), 2 bools
+    out.clock = { i28: r.i32(), f: f32s(r, 11), b58: r.bool(), b59: r.bool() };
+    // FUN_14114e890 (GameState +0x2A0): environment / weather state
+    const e = out.env = { i44: r.i32(), i48: r.i32(), a70: i32s(r, 10), a98: i32s(r, 10) };   // FUN_14114f880 x2
+    e.c0 = r.rep(8, r => i32s(r, 9));                                        // FUN_141147830 x8
+    e.i1e4 = r.i32(); e.i1e8 = r.i32(); e.v1ec = f32s(r, 3); e.s200 = i32s(r, 9); e.i224 = r.i32();
+    e.s228 = i32s(r, 10);                                                    // FUN_141147af0
+    e.i250 = r.i32(); e.i254 = r.i32(); e.i258 = r.i32();
+    e.ring1 = r.arr(r => r.u8()); e.ring2 = r.arr(r => r.u8());
+    e.n284 = r.name(); e.n28c = r.name();
+    // two embedded objects serialized through their own vtables (+0x298, +0x3A8); not decompiled. Their
+    // sizes (66 and 27 int32) come from the exact landing at the end of s2.
+    e.obj298 = i32s(r, 66); e.obj3a8 = i32s(r, 27);
+    e.i430 = f32s(r, 6);
+    e.hasExtra = r.bool();
+    if (e.hasExtra) { e.extra = { i: i32s(r, 5), v88: f32s(r, 3), j: i32s(r, 3), va0: f32s(r, 3), vac: f32s(r, 3), vb8: f32s(r, 3) }; e.extraInts = i32s(r, 2); }   // FUN_14114e610
+    e.f448 = r.f32(); e.f44c = r.f32();
+    // FUN_140f6fc00 (GameState +0x2A8): ints, then six object lists (empty in the sample; not implemented)
+    const c = out.c2a8 = { i: i32s(r, 3), b: i32s(r, 2), counts: i32s(r, 3) };
+    if (c.counts.some(n => n)) throw new Error('FUN_140f6fc00 object lists not implemented');
+    c.listD = r.i32(); c.listE = r.i32(); c.f171 = r.bool(); c.listF = r.i32(); c.f170 = r.bool();
+    if (c.listD || c.listE || c.listF) throw new Error('FUN_140f6fc00 object lists not implemented');
+    // FUN_140f6fb20 (GameState +0x2B0): level actors with saved state (each via its own vtable +0x20;
+    // all share this layout in the sample)
+    out.actors = r.arr(r => ({ name: r.name(), tags: r.arr(r => r.name()), i: i32s(r, 3), n: r.name(), j: i32s(r, 7) }));
+    if (r.o !== end) throw new Error(`s2 parse ends at +${r.o - off}, s2 is ${len} bytes`);
+  } catch (e) { out.error = e.message; }
+  return out;
+}
+
+if (typeof module === 'object' && module.exports) module.exports = { R, parseS1, parseS2 };
+else root.TSParse = { R, parseS1, parseS2 };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -13,7 +13,7 @@ Feedback, bugs or feature requests: please [open an issue on GitHub](https://git
 ## What it shows and edits
 
 The tabs follow the save file. Tabs 1–24 are the 24 parts of the game-state object, in the order they are
-stored. Tabs F1 and F3–F6 are the rest of the game state, one per save function (F1 is the small header before the object, which is function 2). Each tab shows its position and
+stored. Tabs F1 and F3–F6 are the rest of the game state, one per save function (F1 is the small header before the object, which is function 2), and S2 is the scene state saved after it. Each tab shows its position and
 size, the values you can edit, and read-only raw data for anything whose meaning is not known yet; a
 **Download JSON** button saves everything parsed for it. A ★ marks the tabs most worth editing: 24 Money,
 4 Convictions, 17 Inventory, 18 Accessories, 23 Units and 22 Counters.
@@ -32,6 +32,7 @@ size, the values you can edit, and read-only raw data for anything whose meaning
 | 3, 5–14, 16 | — | vote events, small unknown blocks, pickups, location, map actors (first 200), name flags, unit data |
 | F1 Header | — | a version-like int, a byte, total play time |
 | F3 Map & battle, F4 Camera, F5 World map | — | the current map's battle grid (terrain per tile), team relations, deployment slots, camera, world-map icons |
+| S2 Scene state | — | the level's clock (time of day), weather/environment values, level actors with saved state |
 | F6 Flags & variables | character-story unlock flags (73 stories); all 2,361 story/event flags as toggles | script variables (vote outcomes, story position, music…); whether each story was viewed |
 
 Turning on **Advanced editing** (bottom bar) unlocks values whose meaning is not confirmed:
