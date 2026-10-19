@@ -199,6 +199,7 @@
   // Every editable value has a key that resolves (against a fresh parse) to { at, type }.
   //   money | conviction.<liberty|utility|morality> | bonusconv.<…> | unit.<P001>.<stat>
   //   item.<ID> (existing; a missing ITEM_/BATTLE_ACCESSARY_ id is appended)
+  //   note.<ID>              0|1: note owned (inventory map 0); 1 appends the entry, 0 deletes it
   //   counter.<n>            lifetime/achievement counter (FUN_140c68e10)
   //   flag.<NAME>            story/event flag (flag manager table)
   //   story.<NODE>.<0-3>     story-chart node bools (FUN_140d5e9a0)
@@ -239,13 +240,49 @@
     return null;
   }
   const CHARACH_FIELD = { f6: 0, f7: 1, f8: 2, slot: 3 };
-  function readKey(p, s1, key) { const r = resolveKey(s1, key); return !r ? undefined : r.type === 'u8' ? p[r.at] : p.readInt32LE(r.at); }
+  function readKey(p, s1, key) {
+    if (key.startsWith('note.')) { const e = noteEntry(s1.world, key.slice(5)); return e && e.v.v > 0 ? 1 : 0; }
+    const r = resolveKey(s1, key); return !r ? undefined : r.type === 'u8' ? p[r.at] : p.readInt32LE(r.at);
+  }
+
+  // ---- notes: inventory map 0 (FUN_140d5bd60 #0, world+0x7d8 -> +0x00) ----------------------------
+  // The game adds a note with FUN_140d0ca50, which clamps its count to 0..1 and deletes the entry at 0,
+  // so a note is owned exactly when it has an entry. ACHIEVEMENT_047 (NOTE_COMPLETE, FUN_140c5ae20) needs
+  // every GOP_Note row here, and the game checks it only when it adds a note.
+  const NOTE_IDS = CATALOG && CATALOG.groups && CATALOG.groups.notes ? CATALOG.groups.notes.map(x => x[0]) : null;
+  const noteEntry = (w, id) => w.f5bd60[0].find(x => x.id === id);
+  function editNote(p, ss, w, id, v) {
+    if (v !== 0 && v !== 1) throw new Error(`note.${id}: must be 0 or 1`);
+    const m = w.f5bd60[0], e = noteEntry(w, id);
+    if (e) {
+      if (v === 1) { if (e.v.v !== 1) p.writeInt32LE(1, e.v.at); return null; }
+      // delete the entry: FString id (int32 length, latin1 bytes, NUL), then int32 count
+      const start = e.v.at - 4 - (id.length + 1), end = e.v.at + 4;
+      if (p.readInt32LE(start) !== id.length + 1) throw new Error(`note.${id}: unexpected entry layout`);
+      const np = Buffer.concat([p.subarray(0, start), p.subarray(end)]);
+      np.writeInt32LE(m.length - 1, m.countAt);
+      np.writeInt32LE(ss[1].len - (end - start), ss[1].off - 4);   // s1 TArray length
+      return np;
+    }
+    if (v === 0) return null;
+    if (!/^[A-Z0-9_]+$/.test(id) || (NOTE_IDS ? !NOTE_IDS.includes(id) : !id.startsWith('NOTE_'))) throw new Error(`"${id}" is not a note id (GOP_Note)`);
+    return appendEntry(p, ss, m, id, 1);
+  }
+  // append {FString id, int32 v} to a TMap<FName,int32> read by nameIntMap; returns the new plaintext
+  function appendEntry(p, ss, m, id, v) {
+    const entry = Buffer.alloc(4 + id.length + 1 + 4); entry.writeInt32LE(id.length + 1, 0); entry.write(id, 4, 'latin1'); entry.writeInt32LE(v, 4 + id.length + 1);
+    const np = Buffer.concat([p.subarray(0, m.endAt), entry, p.subarray(m.endAt)]);
+    np.writeInt32LE(m.length + 1, m.countAt);
+    np.writeInt32LE(ss[1].len + entry.length, ss[1].off - 4);   // s1 TArray length
+    return np;
+  }
 
   // Apply one edit. Returns a new plaintext buffer when the size changed, otherwise patches in place and returns null.
   function applyEdit(p, ss, s1, key, v) {
     if (!Number.isInteger(v) || v < -2147483648 || v > 2147483647) throw new Error(`${key}: value must be a 32-bit integer`);
     const w = s1.world, k = key.split('.');
     if (k[0] === 'conviction' && (v < 0 || v > 9999)) throw new Error('convictions are clamped to 0..9999 by the game');
+    if (k[0] === 'note') return editNote(p, ss, w, k.slice(1).join('.'), v);
     const r = resolveKey(s1, key);
     if (r) {
       if (r.type === 'bool' && v !== 0 && v !== 1) throw new Error(`${key}: must be 0 or 1`);
@@ -259,14 +296,10 @@
       const id = k.slice(1).join('.');
       if (!/^[A-Z0-9_]+$/.test(id)) throw new Error(`invalid item id "${id}"`);
       // not present: append to the table it belongs to
+      if (id.startsWith('NOTE_')) throw new Error(`notes are added with note.${id}=1`);
       const m = tableForNewId(w, id);
       if (!m) throw new Error(`don't know which inventory table "${id}" belongs to`);
-      const insertAt = m.endAt;
-      const entry = Buffer.alloc(4 + id.length + 1 + 4); entry.writeInt32LE(id.length + 1, 0); entry.write(id, 4, 'latin1'); entry.writeInt32LE(v, 4 + id.length + 1);
-      const np = Buffer.concat([p.subarray(0, insertAt), entry, p.subarray(insertAt)]);
-      np.writeInt32LE(m.length + 1, m.countAt);
-      np.writeInt32LE(ss[1].len + entry.length, ss[1].off - 4);   // s1 TArray length
-      return np;
+      return appendEntry(p, ss, m, id, v);
     }
     throw new Error(`unknown or missing key ${key}`);
   }
@@ -310,6 +343,6 @@
 
   return {
     sha1, tables, locate, replaceBlob, decode, encode, rdFString, sections, preview,
-    UNIT_STAT, CONVICTION, INVENTORY_TABLES, open, reparse, summarize, knownItemIds, groupForNewId, resolveKey, readKey, applyEdit, buildEdited,
+    UNIT_STAT, CONVICTION, INVENTORY_TABLES, NOTE_IDS, open, reparse, summarize, knownItemIds, groupForNewId, resolveKey, readKey, applyEdit, buildEdited,
   };
 });

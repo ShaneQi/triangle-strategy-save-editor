@@ -197,7 +197,7 @@
   // n, parser mark (where the part starts), serializer, tab label, renderer(panel, w)
   // tabs most worth editing: the meaning is known and the edit is practical (★ in the tab bar)
   const KEY_PARTS = {
-    4: 'convictions', 17: 'items, materials and medals (and adding new ones)', 18: 'accessories (and adding new ones)',
+    4: 'convictions', 17: 'notes, items, materials and medals (and adding new ones)', 18: 'accessories (and adding new ones)',
     22: 'achievement counters and the character-story achievement re-send (verified in game)', 23: 'unit level, EXP and stats', 24: 'gold',
   };
   const PARTS = [
@@ -556,10 +556,39 @@
     });
     return el('div', { class: 'toolbar' }, filter, el('span', { class: 'spacer' }), addId, list, addCount, addBtn);
   }
-  function partInventory(p) {
+  // -- part 17, table 0: notes. The game stores an owned note as an entry with count 1 (FUN_140d0ca50 clamps
+  // the count to 0..1 and deletes the entry at 0), so each note is a checkbox (edit key note.<ID>).
+  function notesCard(w) {
+    const catalog = (CAT.groups && CAT.groups.notes) || [], known = new Set(catalog.map(x => x[0]));
+    const inSave = new Set(w.f5bd60[0].filter(x => x.v.v > 0).map(x => x.id));
+    const ids = [...catalog.map(x => x[0]), ...w.f5bd60[0].map(x => x.id).filter(id => !known.has(id))];
+    const cur = id => { const k = 'note.' + id; return edits.has(k) ? edits.get(k) : original.get(k); };
+    const status = el('span', { class: 'hint' });
+    const refresh = () => { status.textContent = `${catalog.filter(([id]) => cur(id)).length} of ${catalog.length} owned`; };
+    const box = rowsBox('notes');
+    box.append(...ids.map(id => {
+      const had = inSave.has(id), i = boolInput('note.' + id, had ? 1 : 0), tag = el('span', { class: 'new' });
+      i.setAttribute('aria-label', `Note: ${itemName(id) || id}`);
+      const show = () => { tag.textContent = i.checked === had ? (had ? '' : 'missing') : (had ? 'will be deleted' : 'will be added'); };
+      i.addEventListener('change', () => { show(); refresh(); });
+      show();
+      const r = row(id, itemName(id) || id, itemName(id) ? id : null, i, tag);
+      r.dataset.had = had ? '1' : '0';
+      return r;
+    }));
+    refresh();
+    const q = el('input', { type: 'search', placeholder: 'Filter notes…' }), onlyMissing = el('input', { type: 'checkbox' });
+    const applyFilter = () => filterRows(box, q.value, onlyMissing.checked ? r => r.dataset.had === '0' : null);
+    q.addEventListener('input', applyFilter); onlyMissing.addEventListener('change', applyFilter);
+    return card(['Notes ', status],
+      note(`Every note in the game (${catalog.length}, GOP_Note). A note is either in the save or not: untick one to delete it, tick a missing one to add it. Changes are applied when you download. Steam ACHIEVEMENT_047 needs every note, but the game checks only at the moment it adds a note itself, so leave one missing note to pick up in game (not yet tested in game).`),
+      el('div', { class: 'toolbar' }, q, el('label', { class: 'chk' }, onlyMissing, ' only notes missing from this save')), box);
+  }
+  function partInventory(p, w) {
     const box = el('div');
-    itemTables(box, summary.inventory);
-    p.append(card('Inventory', note('Five tables: key items & notes, battle items, an unused table, upgrade materials, class medals.'),
+    const { keyItems, ...others } = summary.inventory;   // table 0 (notes) has its own card
+    itemTables(box, others);
+    p.append(notesCard(w), card('Items, materials and medals', note('The other four tables: battle items, an unused table, upgrade materials, class medals.'),
       itemToolbar(box, 'ITEM_', 'items'), box));
   }
   function partAccessories(p, w) {

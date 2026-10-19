@@ -23,7 +23,7 @@ size, the values you can edit, and read-only raw data for anything whose meaning
 | 1 Story chart, 2 Choices | story-chart node flags; dialogue choices | — |
 | 4 Convictions | Utility / Morality / Liberty; a second conviction array | the rest of the part |
 | 15 Place emblems | which emblem (controlling faction) each place's name banner shows | each variant's faction |
-| 17 Inventory, 18 Accessories | item, material, medal and accessory counts; add any item or accessory the game defines (names shown in English) | a second, empty accessory map |
+| 17 Inventory, 18 Accessories | notes as checkboxes (tick a missing note to add it, untick one to delete it; all 70 listed); item, material, medal and accessory counts; add any item or accessory the game defines (names shown in English) | a second, empty accessory map |
 | 19 Battle orders, 20 Shop stock | order counts and flags; shop stock | other shop fields |
 | 21 Seen list | — | notes, stories, tutorials and information opened in the menus |
 | 22 Counters | achievement counters (e.g. #40 = total gold earned); character-story achievement tracker (flags 6/7/8, slot in advanced mode) | which Steam achievement each unit's tracker fires |
