@@ -26,6 +26,9 @@
   const INV_LABEL = { battleItems: 'Battle items', materials: 'Upgrade materials', medals: 'Class medals', keyItems: 'Key items & notes', table2: 'Other' };
   const UNIT_COLS = ['level', 'exp', 'hp', 'tp', 'move', 'jump', 'str', 'int', 'def', 'mdf', 'dex', 'agi', 'luk'];
   const UNIT_COL_TIPS = { tp: 'Max TP', move: 'Movement × 100 (600 = 6 squares)', jump: 'Jump height' };
+  // Only level and EXP are editable: the other stats are recalculated from the game's growth table for
+  // every unit entering a battle (FUN_140dfa0d0 → FUN_140dedeb0), so edits to them never reach battle.
+  const UNIT_EDITABLE = new Set(['level', 'exp']);
   const SEEN_CAT = { 1: 'Notes', 2: 'Character stories', 3: 'Tutorials', 4: 'Information' };
   // Achievement counter ids (world part 22) are EAchievementType values, in the enum's declaration order
   // (exe reflection strings at 0x143d3d6d0…; FUN_140c55f30 indexes the achievement table with them).
@@ -689,7 +692,7 @@
       body.append(el('tr', {},
         el('td', { title: u.id }, `${unitName(u.id)} `, el('span', { class: 'iid' }, pid)),
         el('td', { title: u.class }, GD.jobs[u.class] || u.class.replace('BATTLE_JOB_CH_', '')),
-        ...UNIT_COLS.map(c => el('td', {}, numInput(`unit.${pid}.${c}`, u[c], { min: 0 }))),
+        ...UNIT_COLS.map(c => el('td', {}, UNIT_EDITABLE.has(c) ? numInput(`unit.${pid}.${c}`, u[c], { min: 0 }) : String(u[c]))),
         el('td', {}, String(u.speed)),
         attendanceCell(u, pid),
         el('td', { class: 'small' }, u.equippedAccessories.map(a => itemName('BATTLE_' + a) || a).join(', '))));
@@ -700,7 +703,7 @@
     const show = () => { pre.textContent = jsonText(w.units[+sel.value]); };
     sel.addEventListener('change', show); show();
     p.append(
-      card('Units', note('Level and EXP are the safest edits. The game may recompute other stats from level and class when the save loads. Attendance is how many battles the unit has fought; it carries over to New Game+, and each of its character stories appears only once attendance reaches the requirement for that story. Beside it are those requirements from the game data (✓ = reached; hover for the story names); a story also needs its chapter reached. Editing attendance has not been tested in game.'), el('div', { class: 'scroll wide' }, t)),
+      card('Units', note('Only Level, EXP and Attendance can be edited. HP, TP, MOVE, JUMP, STR–LUK and SPD are read-only because editing them has no effect in battle: the game recalculates them from its growth table for the unit\'s level and class every time the unit enters a battle (and on every level-up and class change). The saved values are only what the menus show. To change a unit\'s battle stats, change its level, or its class, weapon and accessories in the game. Attendance is how many battles the unit has fought; it carries over to New Game+, and each of its character stories appears only once attendance reaches the requirement for that story. Beside it are those requirements from the game data (✓ = reached; hover for the story names); a story also needs its chapter reached. Editing attendance has not been tested in game.'), el('div', { class: 'scroll wide' }, t)),
       card('Full unit record (read-only)', el('div', { class: 'toolbar' }, sel), pre));
   }
 
