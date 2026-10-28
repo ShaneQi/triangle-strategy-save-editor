@@ -692,7 +692,7 @@
       body.append(el('tr', {},
         el('td', { title: u.id }, `${unitName(u.id)} `, el('span', { class: 'iid' }, pid)),
         el('td', { title: u.class }, GD.jobs[u.class] || u.class.replace('BATTLE_JOB_CH_', '')),
-        ...UNIT_COLS.map(c => el('td', {}, UNIT_EDITABLE.has(c) ? numInput(`unit.${pid}.${c}`, u[c], { min: 0 }) : String(u[c]))),
+        ...UNIT_COLS.map(c => el('td', {}, numInput(`unit.${pid}.${c}`, u[c], { min: 0, adv: !UNIT_EDITABLE.has(c) }))),
         el('td', {}, String(u.speed)),
         attendanceCell(u, pid),
         el('td', { class: 'small' }, u.equippedAccessories.map(a => itemName('BATTLE_' + a) || a).join(', '))));
@@ -703,7 +703,7 @@
     const show = () => { pre.textContent = jsonText(w.units[+sel.value]); };
     sel.addEventListener('change', show); show();
     p.append(
-      card('Units', note('Only Level, EXP and Attendance can be edited. HP, TP, MOVE, JUMP, STR–LUK and SPD are read-only because editing them has no effect in battle: the game recalculates them from its growth table for the unit\'s level and class every time the unit enters a battle (and on every level-up and class change). The saved values are only what the menus show. To change a unit\'s battle stats, change its level, or its class, weapon and accessories in the game. Attendance is how many battles the unit has fought; it carries over to New Game+, and each of its character stories appears only once attendance reaches the requirement for that story. Beside it are those requirements from the game data (✓ = reached; hover for the story names); a story also needs its chapter reached. Editing attendance has not been tested in game.'), el('div', { class: 'scroll wide' }, t)),
+      card('Units', note('Level, EXP and Attendance can be edited. HP, TP, MOVE, JUMP and STR–LUK need Advanced editing because editing them has no effect in battle: the game recalculates them from its growth table for the unit\'s level and class every time the unit enters a battle (and on every level-up and class change), so an edit only changes what the menus show. SPD is read-only. To change a unit\'s battle stats, change its level, or its class, weapon and accessories in the game. Attendance is how many battles the unit has fought; it carries over to New Game+, and each of its character stories appears only once attendance reaches the requirement for that story. Beside it are those requirements from the game data (✓ = reached; hover for the story names); a story also needs its chapter reached. Editing attendance has not been tested in game.'), el('div', { class: 'scroll wide' }, t)),
       card('Full unit record (read-only)', el('div', { class: 'toolbar' }, sel), pre));
   }
 
