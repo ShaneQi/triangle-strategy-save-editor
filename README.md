@@ -57,9 +57,10 @@ does a full parse, and confirms that every edited value reads back as entered.
 ## Caveats
 
 - An edited save hasn't been tested in the game yet. Keep backups.
-- A unit's HP, TP, move, jump and STR–LUK are the game's table values for its level and class. The game
-  rewrites them from that table whenever the unit levels up or changes class, so edits to them last only
-  until then. Changing the level alone doesn't update them until the next level-up.
+- A unit's HP, TP, move, jump and STR–LUK are the game's table values for its level and class. Edits to
+  them show in menus but not in battle: every unit entering a battle gets its stats recalculated from the
+  table for its level and class (the game also rewrites them on level-up and class change). To change
+  battle stats, change the level or class, or equipment and abilities.
 - Convictions are clamped by the game to 0–9999.
 - Changing event flags, story-chart flags or choices can break story progression.
 - Raising an achievement counter may unlock a Steam achievement.
