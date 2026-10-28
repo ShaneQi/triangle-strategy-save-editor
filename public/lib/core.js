@@ -143,7 +143,10 @@
   // ---- high level: open / summarize / edit / save ----------------------------------------------
   // Unit parameter block (FUN_140df76a0, 16 int32 at unit+0xc4). Indices verified against the save;
   // names for 9..15 follow the game's stat order (STR/INT/DEF/MDF + DEX/AGI from buff items, LUK from accessories).
-  const UNIT_STAT = { level: 0, exp: 1, jump: 3, hp: 5, move: 6, str: 9, int: 10, def: 11, mdf: 12, dex: 13, agi: 14, luk: 15 };
+  // Unit stat array (unit +0xC4, 16 int32). [2..15] are a copy of the GOP_Battle_UnitGrowth row for the
+  // unit's level and class rank, rewritten by the game on level-up and class change. [2] is movement × 100,
+  // [4] jump down, [7] speed and [8] TP per turn are floats.
+  const UNIT_STAT = { level: 0, exp: 1, move: 2, jump: 3, hp: 5, tp: 6, str: 9, int: 10, dex: 11, agi: 12, luk: 13, def: 14, mdf: 15 };
   const CONVICTION = { liberty: 1, utility: 2, morality: 3 };   // game enum: 1 FREEDOM, 2 BENEFIT, 3 MORAL
   const INVENTORY_TABLES = ['keyItems', 'battleItems', 'table2', 'materials', 'medals'];
 

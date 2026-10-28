@@ -27,7 +27,7 @@ size, the values you can edit, and read-only raw data for anything whose meaning
 | 19 Battle orders, 20 Shop stock | order counts and flags; shop stock | other shop fields |
 | 21 Seen list | — | notes, stories, tutorials and information opened in the menus; each character story by name with whether it was viewed |
 | 22 Counters | achievement counters (e.g. #40 = total gold earned); character-story achievement tracker (flags 6/7/8, slot in advanced mode) | which Steam achievement each unit's tracker fires |
-| 23 Units | level, EXP, HP, move, jump, STR/INT/DEF/MDF/DEX/AGI/LUK and battle attendance (battles fought, shown with the battles each of the unit's character stories needs) for all units (with character and class names) | speed, equipped accessories, full unit records |
+| 23 Units | level, EXP, HP, TP, move, jump, STR/INT/DEF/MDF/DEX/AGI/LUK and battle attendance (battles fought, shown with the battles each of the unit's character stories needs) for all units (with character and class names) | speed, equipped accessories, full unit records |
 | 24 Money | gold | leader name and other values |
 | 3, 5–14, 16 | — | vote events, small unknown blocks, pickups, location, map actors (first 200), name flags, unit data |
 | F1 Header | — | a version-like int, a byte, total play time |
@@ -57,8 +57,9 @@ does a full parse, and confirms that every edited value reads back as entered.
 ## Caveats
 
 - An edited save hasn't been tested in the game yet. Keep backups.
-- Level and EXP are the safest unit edits. The game may recompute other stats from level and
-  class when the save loads.
+- A unit's HP, TP, move, jump and STR–LUK are the game's table values for its level and class. The game
+  rewrites them from that table whenever the unit levels up or changes class, so edits to them last only
+  until then. Changing the level alone doesn't update them until the next level-up.
 - Convictions are clamped by the game to 0–9999.
 - Changing event flags, story-chart flags or choices can break story progression.
 - Raising an achievement counter may unlock a Steam achievement.

@@ -24,7 +24,8 @@
   const itemName = id => CAT.names[id] || null;
   const unitName = id => GD.units[id] || id.replace('UNIT_MASTER_CH_', '');
   const INV_LABEL = { battleItems: 'Battle items', materials: 'Upgrade materials', medals: 'Class medals', keyItems: 'Key items & notes', table2: 'Other' };
-  const UNIT_COLS = ['level', 'exp', 'hp', 'move', 'jump', 'str', 'int', 'def', 'mdf', 'dex', 'agi', 'luk'];
+  const UNIT_COLS = ['level', 'exp', 'hp', 'tp', 'move', 'jump', 'str', 'int', 'def', 'mdf', 'dex', 'agi', 'luk'];
+  const UNIT_COL_TIPS = { tp: 'Max TP', move: 'Movement × 100 (600 = 6 squares)', jump: 'Jump height' };
   const SEEN_CAT = { 1: 'Notes', 2: 'Character stories', 3: 'Tutorials', 4: 'Information' };
   // Achievement counter ids (world part 22) are EAchievementType values, in the enum's declaration order
   // (exe reflection strings at 0x143d3d6d0…; FUN_140c55f30 indexes the achievement table with them).
@@ -680,7 +681,7 @@
   }
   function partUnits(p, w) {
     const t = el('table');
-    t.append(el('thead', {}, el('tr', {}, el('th', {}, 'Unit'), el('th', {}, 'Class'), ...UNIT_COLS.map(c => el('th', {}, c.toUpperCase())), el('th', {}, 'SPD'),
+    t.append(el('thead', {}, el('tr', {}, el('th', {}, 'Unit'), el('th', {}, 'Class'), ...UNIT_COLS.map(c => el('th', UNIT_COL_TIPS[c] ? { title: UNIT_COL_TIPS[c] } : {}, c.toUpperCase())), el('th', {}, 'SPD'),
       el('th', { title: 'Battles the unit has fought' }, 'Attendance'), el('th', {}, 'Accessories'))));
     const body = el('tbody');
     for (const u of summary.units) {
